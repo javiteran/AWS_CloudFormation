@@ -1,0 +1,262 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creacion de una VPC, subredes, internet gateway y tabla de rutas con IPv4 e IPv6
+    Ademas creara :
+      - una instancia EC2 Ubuntu Server 24.04
+      - una instancia EC2 Windows Server 2022
+        con IPs elasticas
+  
+  Utilizado CloudFormation para AWS Academy Learning Lab
+  Autor: Javier Teran Gonzalez
+  Fecha: 04/04/2024
+  Version: 1.00
+  Modificaciones: 16/04/2024. Cambiar AMIs de Ubuntu y Windows
+                  16/04/2024. Añadir IPv6 a las instancias
+Parameters:
+    NombreProyecto:
+        Description: 'Nombre del proyecto'
+        Type: String
+        Default: 'SRI24'         
+    NN:
+        Type: Number
+        Description: Numero de alumno
+        Default: 30
+        ConstraintDescription: 'Debe estar en el rango del [1-255]'
+        MinValue: 1
+        MaxValue: 255
+    AMIUbuntu:
+        Description: 'AMI ID Ubuntu Server 24.04'
+        Type: String
+        Default: 'ami-04b70fa74e45c3917'    
+    AMIWindows:
+        Description: 'AMI ID Windows Server 2022'
+        Type: String
+        Default: 'ami-0f496107db66676ff' 
+Resources:
+    VPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: 10.24.0.0/16
+            EnableDnsHostnames: true
+            EnableDnsSupport: true
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-vpc'
+    IPv6CidrBlock:
+        Type: AWS::EC2::VPCCidrBlock
+        Properties:
+            VpcId: !Ref VPC
+            AmazonProvidedIpv6CidrBlock: true
+    
+    # Internet Gateway y EgressOnlyInternetGateway
+
+    InternetGateway:
+        Type: AWS::EC2::InternetGateway
+        Properties:
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-igw'
+
+    VPCGatewayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            VpcId: !Ref VPC
+            InternetGatewayId: !Ref InternetGateway
+
+    #EgressOnlyInternetGateway:
+    #    Type: AWS::EC2::EgressOnlyInternetGateway
+    #    Properties: 
+    #      VpcId: !Ref VPC
+   
+    # Tabla de rutas
+
+    RouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-rtb'
+    
+    DefaultRouteIPv4:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref RouteTable
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: !Ref InternetGateway
+    
+    DefaultRouteIPv6:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref RouteTable
+            DestinationIpv6CidrBlock: ::/0
+            GatewayId: !Ref InternetGateway
+    
+    # SubRedes publicas
+    
+    PublicSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Sub '10.24.1${NN}.0/24'
+            Ipv6CidrBlock:  !Select [1, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            #Ipv6CidrBlock: !GetAtt 'VPC.Ipv6CidrBlocks.0'
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-PublicSubnet1'
+
+
+    PublicSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Sub '10.24.2${NN}.0/24'
+            Ipv6CidrBlock:  !Select [2, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-PublicSubnet2'
+
+
+    # Asociacion de subredes con tabla de rutas
+
+    SubnetRouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref PublicSubnet1
+            RouteTableId: !Ref RouteTable
+
+    SubnetRouteTableAssociation2:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref PublicSubnet2
+            RouteTableId: !Ref RouteTable
+
+    # Grupo de seguridad Ubuntu
+    UbuntuSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Security group for Ubuntu Server
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 53
+                ToPort: 53
+                CidrIp: 0.0.0.0/0
+                Description: Allow DNS(TCP)
+              - IpProtocol: udp
+                FromPort: 53
+                ToPort: 53
+                CidrIp: 0.0.0.0/0
+                Description: Allow DNS(UDP)
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIp: 0.0.0.0/0
+                Description: Allow HTTP                
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-us-sg'
+    
+    # Creacion de instancia Ubuntu
+
+    UbuntuInstance:
+        Type: AWS::EC2::Instance
+        Properties:
+          ImageId: !Ref AMIUbuntu
+          InstanceType: t2.micro
+          KeyName: vockey
+          Monitoring: false
+          SecurityGroupIds:
+              - !Ref UbuntuSecurityGroup
+          SubnetId: !Ref PublicSubnet1
+          PrivateIpAddress: !Sub '10.24.1${NN}.100'
+          UserData:
+            Fn::Base64: !Sub |
+              #!/bin/bash
+              echo 'User data for Ubuntu Server'
+              apt-get update -y
+              apt-get upgrade -y
+              apt-get install apache2 -y
+          Tags:
+            - Key: Name
+              Value: !Sub '${NombreProyecto}${NN}-us'
+    UbuntuElasticIp:
+        Type: AWS::EC2::EIP
+        Properties:
+            InstanceId: !Ref UbuntuInstance
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-us-ip'
+
+    # Grupo de seguridad windows
+    WindowsSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Security group for Windows Server
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 3389
+                ToPort: 3389
+                CidrIp: 0.0.0.0/0
+                Description: Allow RDP
+              - IpProtocol: tcp
+                FromPort: 53
+                ToPort: 53
+                CidrIp: 0.0.0.0/0
+                Description: Allow DNS(TCP)
+              - IpProtocol: udp
+                FromPort: 53
+                ToPort: 53
+                CidrIp: 0.0.0.0/0
+                Description: Allow DNS(UDP)
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIp: 0.0.0.0/0
+                Description: Allow HTTP
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-ws-sg'
+
+    # Creacion de instancia Windows
+    WindowsInstance:
+        Type: AWS::EC2::Instance
+        Properties:
+            ImageId: !Ref AMIWindows
+            InstanceType: t2.small
+            KeyName: vockey
+            Monitoring: false
+            SecurityGroupIds:
+                - !Ref WindowsSecurityGroup
+            SubnetId: !Ref PublicSubnet1
+            PrivateIpAddress: !Sub '10.24.1${NN}.200'
+            UserData:
+              Fn::Base64: !Sub |
+                <powershell>
+                Write-Host 'User data for Windows Server'
+                </powershell>                
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-ws'
+    WindowsElasticIp:
+        Type: AWS::EC2::EIP
+        Properties:
+            InstanceId: !Ref WindowsInstance
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-ws-ip'
+Outputs:
+    UbuntuInstance:
+        Description: Ubuntu Instance Public IP
+        Value: !GetAtt UbuntuInstance.PublicIp
+    WindowsInstance:
+        Description: Windows Instance Public IP
+        Value: !GetAtt WindowsInstance.PublicIp
