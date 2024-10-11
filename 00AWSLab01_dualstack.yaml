@@ -1,7 +1,7 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Creacion de una VPC, subredes, internet gateway y tabla de rutas con IPv4 e IPv6
+  Creacion de una VPC, 4 subredes publicas y privadas, internet gateway y tabla de rutas con IPv4 e IPv6
     Ademas creara :
       - una instancia EC2 Ubuntu Server 24.04
       - una instancia EC2 Windows Server 2022
@@ -9,10 +9,13 @@ Description: >
   
   Utilizado CloudFormation para AWS Academy Learning Lab
   Autor: Javier Teran Gonzalez
-  Fecha: 04/04/2024
-  Version: 1.00
+  Fecha creacion:     04/04/2024
+  
+  Version: 1.10
   Modificaciones: 16/04/2024. Cambiar AMIs de Ubuntu y Windows
-                  16/04/2024. Añadir IPv6 a las instancias
+                  16/04/2024. Crear las instancias tambien con IPv6
+                  11/10/2024. Crear dos subredes privadas con sus rutas. 
+                              Crear variables export para utilizar en otra plantilla. Ej: RDS
 Parameters:
     NombreProyecto:
         Description: 'Nombre del proyecto'
@@ -21,10 +24,10 @@ Parameters:
     NN:
         Type: Number
         Description: Numero de alumno
-        Default: 30
-        ConstraintDescription: 'Debe estar en el rango del [1-255]'
+        Default: 15
+        ConstraintDescription: 'Debe estar en el rango del [1-25]'
         MinValue: 1
-        MaxValue: 255
+        MaxValue: 25
     AMIUbuntu:
         Description: 'AMI ID Ubuntu Server 24.04'
         Type: String
@@ -69,21 +72,42 @@ Resources:
     #    Properties: 
     #      VpcId: !Ref VPC
    
-    # Tabla de rutas
+    # Tabla de rutas publica
 
-    RouteTable:
+    TablaRutasPublica:
         Type: AWS::EC2::RouteTable
         Properties:
             VpcId: !Ref VPC
             Tags:
                 - Key: Name
-                  Value: !Sub '${NombreProyecto}${NN}-rtb'
+                  Value: !Sub '${NombreProyecto}${NN}-rtb-public'
     
+
+  # Private Routes Tables
+    TablaRutasPrivada1:
+        Type: "AWS::EC2::RouteTable"
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                - Key: "Name"
+                  Value: !Sub '${NombreProyecto}${NN}-rtb-private1'
+
+    TablaRutasPrivada2:
+        Type: "AWS::EC2::RouteTable"
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                - Key: "Name"
+                  Value: !Sub '${NombreProyecto}${NN}-rtb-private2'
+
+
+    # Rutas por defecto para la tabla de rutas publica. Tanto IPv4 como IPv6
+
     DefaultRouteIPv4:
         Type: AWS::EC2::Route
         DependsOn: VPCGatewayAttachment
         Properties:
-            RouteTableId: !Ref RouteTable
+            RouteTableId: !Ref TablaRutasPublica
             DestinationCidrBlock: 0.0.0.0/0
             GatewayId: !Ref InternetGateway
     
@@ -91,7 +115,7 @@ Resources:
         Type: AWS::EC2::Route
         DependsOn: VPCGatewayAttachment
         Properties:
-            RouteTableId: !Ref RouteTable
+            RouteTableId: !Ref TablaRutasPublica
             DestinationIpv6CidrBlock: ::/0
             GatewayId: !Ref InternetGateway
     
@@ -101,7 +125,7 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.1${NN}.0/24'
+            CidrBlock: !Sub '10.24.${NN}1.0/24'
             Ipv6CidrBlock:  !Select [1, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             #Ipv6CidrBlock: !GetAtt 'VPC.Ipv6CidrBlocks.0'
             AssignIpv6AddressOnCreation: true
@@ -110,33 +134,71 @@ Resources:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-PublicSubnet1'
 
-
     PublicSubnet2:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.2${NN}.0/24'
+            CidrBlock: !Sub '10.24.${NN}2.0/24'
             Ipv6CidrBlock:  !Select [2, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
-            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
             Tags:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-PublicSubnet2'
 
+    # Asociacion de subredes publicas con tabla de rutas
 
-    # Asociacion de subredes con tabla de rutas
-
-    SubnetRouteTableAssociation:
+    SubnetRouteTableAssociation1:
         Type: AWS::EC2::SubnetRouteTableAssociation
         Properties:
             SubnetId: !Ref PublicSubnet1
-            RouteTableId: !Ref RouteTable
+            RouteTableId: !Ref TablaRutasPublica
 
     SubnetRouteTableAssociation2:
         Type: AWS::EC2::SubnetRouteTableAssociation
         Properties:
             SubnetId: !Ref PublicSubnet2
-            RouteTableId: !Ref RouteTable
+            RouteTableId: !Ref TablaRutasPublica
+
+    # SubRedes privadas
+
+    PrivateSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Sub '10.24.${NN}3.0/24'
+            Ipv6CidrBlock:  !Select [3, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-PrivateSubnet1'
+
+    PrivateSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Sub '10.24.${NN}4.0/24'
+            Ipv6CidrBlock:  !Select [4, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-PrivateSubnet2'
+
+    # Asociacion de subredes privadas con tabla de rutas
+
+    SubnetRouteTableAssociation3:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref PrivateSubnet1
+            RouteTableId: !Ref TablaRutasPrivada1
+
+    SubnetRouteTableAssociation4:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref PrivateSubnet2
+            RouteTableId: !Ref TablaRutasPrivada2
 
     # Grupo de seguridad Ubuntu
     UbuntuSecurityGroup:
@@ -176,11 +238,11 @@ Resources:
           SecurityGroupIds:
               - !Ref UbuntuSecurityGroup
           SubnetId: !Ref PublicSubnet1
-          PrivateIpAddress: !Sub '10.24.1${NN}.100'
+          PrivateIpAddress: !Sub '10.24.${NN}1.100'
           UserData:
             Fn::Base64: !Sub |
               #!/bin/bash
-              echo 'User data for Ubuntu Server'
+              echo 'User data para Ubuntu Server'
               apt-get update -y
               apt-get upgrade -y
               apt-get install apache2 -y
@@ -199,7 +261,7 @@ Resources:
     WindowsSecurityGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
-            GroupDescription: Security group for Windows Server
+            GroupDescription: Security group/grupo de seguridad para Windows Server
             VpcId: !Ref VPC
             SecurityGroupIngress:
               - IpProtocol: tcp
@@ -237,11 +299,12 @@ Resources:
             SecurityGroupIds:
                 - !Ref WindowsSecurityGroup
             SubnetId: !Ref PublicSubnet1
-            PrivateIpAddress: !Sub '10.24.1${NN}.200'
-            UserData:
+            PrivateIpAddress: !Sub '10.24.${NN}1.200'
+            UserData: # Instala IIS
               Fn::Base64: !Sub |
                 <powershell>
-                Write-Host 'User data for Windows Server'
+                Write-Host 'User data para Windows Server'
+                Install-WindowsFeature -name Web-Server -IncludeManagementTools  
                 </powershell>                
             Tags:
                 - Key: Name
@@ -260,3 +323,28 @@ Outputs:
     WindowsInstance:
         Description: Windows Instance Public IP
         Value: !GetAtt WindowsInstance.PublicIp
+    VPCId:
+        Description: "VPC ID"
+        Value: !Ref VPC
+        Export:
+            Name: "MiVPCID"  # Exporta el ID de la VPC. Utilizo el export para poder importar el ID de la VPC en otro stack
+                             # En la plantilla destino utilizar --->   VpcId: !ImportValue MiVPCID
+    PublicSubnet1Id:
+        Description: "Public Subnet 1 ID"
+        Value: !Ref PublicSubnet1
+
+    PublicSubnet2Id:
+        Description: "Public Subnet 2 ID"
+        Value: !Ref PublicSubnet2
+
+    PrivateSubnet1Id:
+        Description: "Private Subnet 1 ID"
+        Value: !Ref PrivateSubnet1
+        Export:
+            Name: "MiPrivateSubnet1ID"  # Exporta el ID de la Subnet 1
+
+    PrivateSubnet2Id:
+        Description: "Private Subnet 2 ID"
+        Value: !Ref PrivateSubnet2
+        Export:
+            Name: "MiPrivateSubnet2ID"  # Exporta el ID de la Subnet 2

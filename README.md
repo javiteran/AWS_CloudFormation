@@ -29,8 +29,10 @@ Creará:
 
 * Una VPC con Ipv4 e Ipv6
 * Dos subredes públicas
+* Dos subredes privadas
 * Una puerta de enlace de internet
-* La tabla de enrutamiento de las subredes para permitir conectarse a internet
+* La tabla de enrutamiento de las subredes publicas para permitir conectarse a internet
+* Las tablas de enrutamiento de las subredes privadas
 * Un grupo de seguridad para Ubuntu y otro para Windows.
 * Se abrirán los puertos 80, 22 y 3389 para Windows y el 53 y 80  para Ubuntu.
 * Se permitirá todo el tráfico entre las instancias de la VPC.
@@ -38,3 +40,5 @@ Creará:
 * Una instancia EC2 con Ubuntu Server 24.04
 * En Ubuntu y Windows se instalarán servicios y roles como DNS para probar la instalación en la creación.
 * Direcciones IPs públicas estáticas para las instancias EC2
+
+* Creación de variables export para utilizar con otra plantilla de CloudFormation. Ejemplo: añadir un RDS
