@@ -25,17 +25,17 @@ Parameters:
         Type: Number
         Description: Numero de alumno
         Default: 15
-        ConstraintDescription: 'Debe estar en el rango del [1-25]'
+        ConstraintDescription: 'Debe estar en el rango del [1-50]'
         MinValue: 1
-        MaxValue: 25
+        MaxValue: 50
     AMIUbuntu:
         Description: 'AMI ID Ubuntu Server 24.04'
         Type: String
-        Default: 'ami-04b70fa74e45c3917'    
+        Default: 'ami-0866a3c8686eaeeba'    
     AMIWindows:
         Description: 'AMI ID Windows Server 2022'
         Type: String
-        Default: 'ami-0f496107db66676ff' 
+        Default: 'ami-0888db1202897905c' 
 Resources:
     VPC:
         Type: AWS::EC2::VPC
@@ -125,7 +125,7 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.${NN}1.0/24'
+            CidrBlock: !Sub '10.24.1${NN}.0/24'
             Ipv6CidrBlock:  !Select [1, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             #Ipv6CidrBlock: !GetAtt 'VPC.Ipv6CidrBlocks.0'
             AssignIpv6AddressOnCreation: true
@@ -138,7 +138,7 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.${NN}2.0/24'
+            CidrBlock: !Sub '10.24.2${NN}.0/24'
             Ipv6CidrBlock:  !Select [2, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 1, !GetAZs '' ]
@@ -166,7 +166,7 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.${NN}3.0/24'
+            CidrBlock: !Sub '10.24.${NN}.0/25'
             Ipv6CidrBlock:  !Select [3, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 0, !GetAZs '' ]
@@ -178,7 +178,7 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.${NN}4.0/24'
+            CidrBlock: !Sub '10.24.${NN}.128/25'
             Ipv6CidrBlock:  !Select [4, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 1, !GetAZs '' ]
@@ -200,11 +200,12 @@ Resources:
             SubnetId: !Ref PrivateSubnet2
             RouteTableId: !Ref TablaRutasPrivada2
 
-    # Grupo de seguridad Ubuntu
+    # Grupo de seguridad Ubuntu. Puertos DNS, HTTP, HTTPS y SSH
     UbuntuSecurityGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
-            GroupDescription: Security group for Ubuntu Server
+            GroupName: !Sub '${NombreProyecto}${NN}-us-sg'
+            GroupDescription: !Sub '${NombreProyecto}${NN}-us-sg'
             VpcId: !Ref VPC
             SecurityGroupIngress:
               - IpProtocol: tcp
@@ -222,6 +223,31 @@ Resources:
                 ToPort: 80
                 CidrIp: 0.0.0.0/0
                 Description: Allow HTTP                
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIpv6: ::/0
+                Description: Allow HTTP                
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIp: 0.0.0.0/0
+                Description: Allow HTTPS                
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIpv6: ::/0
+                Description: Allow HTTPS                
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIp: 0.0.0.0/0
+                Description: Allow SSH
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIpv6: ::/0
+                Description: Allow SSH
             Tags:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-us-sg'
@@ -238,7 +264,7 @@ Resources:
           SecurityGroupIds:
               - !Ref UbuntuSecurityGroup
           SubnetId: !Ref PublicSubnet1
-          PrivateIpAddress: !Sub '10.24.${NN}1.100'
+          PrivateIpAddress: !Sub '10.24.1${NN}.100'
           UserData:
             Fn::Base64: !Sub |
               #!/bin/bash
@@ -261,7 +287,8 @@ Resources:
     WindowsSecurityGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
-            GroupDescription: Security group/grupo de seguridad para Windows Server
+            GroupName: !Sub '${NombreProyecto}${NN}-ws-sg'
+            GroupDescription: !Sub '${NombreProyecto}${NN}-ws-sg'
             VpcId: !Ref VPC
             SecurityGroupIngress:
               - IpProtocol: tcp
@@ -284,6 +311,22 @@ Resources:
                 ToPort: 80
                 CidrIp: 0.0.0.0/0
                 Description: Allow HTTP
+              - IpProtocol: tcp
+                FromPort: 53
+                ToPort: 53
+                CidrIpv6: ::/0
+                Description: Allow DNS(TCP)
+              - IpProtocol: udp
+                FromPort: 53
+                ToPort: 53
+                CidrIpv6: ::/0
+                Description: Allow DNS(UDP)
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIpv6: ::/0
+                Description: Allow HTTP
+
             Tags:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-ws-sg'
@@ -299,7 +342,7 @@ Resources:
             SecurityGroupIds:
                 - !Ref WindowsSecurityGroup
             SubnetId: !Ref PublicSubnet1
-            PrivateIpAddress: !Sub '10.24.${NN}1.200'
+            PrivateIpAddress: !Sub '10.24.1${NN}.200'
             UserData: # Instala IIS
               Fn::Base64: !Sub |
                 <powershell>
