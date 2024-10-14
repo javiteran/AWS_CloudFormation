@@ -67,6 +67,7 @@ Resources:
             VpcId: !Ref VPC
             InternetGatewayId: !Ref InternetGateway
 
+    # Puerta de enlace de internet solo de salida para IPv6 EIgw    
     #EgressOnlyInternetGateway:
     #    Type: AWS::EC2::EgressOnlyInternetGateway
     #    Properties: 
@@ -360,6 +361,11 @@ Resources:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-ws-ip'
 Outputs:
+    Proyecto:
+        Description: Nombre del proyecto
+        Value: !Sub '${NombreProyecto}${NN}'
+        Export:
+            Name:  "Proyecto"
     UbuntuInstance:
         Description: Ubuntu Instance Public IP
         Value: !GetAtt UbuntuInstance.PublicIp

@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Plantilla CloudFormation para crear una base de datos RDS MySQL"
+
+Resources:
+  MyDBInstance:
+      Type: "AWS::RDS::DBInstance"
+      Properties: 
+        DBInstanceIdentifier: !ImportValue '${Proyecto}-bbdd'    # Nombre de la instancia de la base de datos
+        DBInstanceClass: "db.t3.micro"        # Clase de instancia de la base de datos (db.t3.micro es adecuada para pruebas)
+        AllocatedStorage: "20"                # Almacenamiento en GB
+        DBName: "flores"                      # Nombre de la base de datos
+        Engine: "MySQL"                       # Motor de base de datos (en este caso MySQL)
+        EngineVersion: "8.0"                  # Versión de MySQL
+        MasterUsername: "admin"               # Usuario administrador
+        MasterUserPassword: "admin12345"      # Contraseña del administrador (modifica para producción)
+        BackupRetentionPeriod: 7              # Número de días que se retendrán los backups automáticos
+        MultiAZ: False                        # Si es una instancia Multi-AZ o no
+        PubliclyAccessible: False             # Define si la base de datos es accesible públicamente
+        StorageType: "gp2"                    # Tipo de almacenamiento (gp2 es almacenamiento en discos SSD)
+        VPCSecurityGroups: 
+          - !Ref MiDDBBsg                # Referencia al grupo de seguridad creado más abajo
+        DBSubnetGroupName: !Ref MyDBSubnetGroup  # Subnet group de la base de datos
+  MiDDBBsg:
+      Type: "AWS::EC2::SecurityGroup"
+      Properties: 
+        GroupName: !ImportValue '${Proyecto}-bbdd-sg' 
+        GroupDescription: "MiDDBBsg. Habilitar el acceso a la base de datos MySQL"
+        VpcId: !ImportValue MiVPCID        # Referencia al VPC donde estará la base de datos
+        SecurityGroupIngress: 
+          - IpProtocol: "tcp"
+            FromPort: "3306"               # Puerto de MySQL
+            ToPort: "3306"
+            CidrIp: "0.0.0.0/0"            # Permitir acceso desde cualquier dirección IP (ajustar para producción para que coincida con el grupo de seguridad de la aplicación/EC2s)
+  MyDBSubnetGroup:
+      Type: "AWS::RDS::DBSubnetGroup"
+      Properties:
+        DBSubnetGroupDescription: "Grupo de subredes para la base de datos MySQL"
+        SubnetIds: 
+          - !ImportValue MiPrivateSubnet1ID    # Sustituir con tus Subnets de tu VPC
+          - !ImportValue MiPrivateSubnet2ID   # Sustituir con tus Subnets de tu VPC
+
+
+  #Outputs:
+  #    DBInstanceEndpoint:
+  #      Description: "Endpoint/DNS de la base de datosMySQL"
+  #      Value: !GetAtt MyDBInstance.Endpoint.Address
+
+  #    DBInstancePort:
+  #      Description: "Puerto de la bbdd MySQL"
+  #      Value: !GetAtt MyDBInstance.Endpoint.Port
