@@ -348,8 +348,9 @@ Resources:
                 ToPort: 80
                 CidrIpv6: ::/0
                 Description: Allow HTTP IPv6
-              - IpProtocol: "-1"  # El valor "-1" permite todo el tráfico (todos los protocolos)
-                SourceSecurityGroupId: !- !Ref UbuntuSecurityGroup
+              - IpProtocol: '-1'
+                SourceSecurityGroupId: !Ref UbuntuSecurityGroup
+                Description: Permitir tráfico desde el grupo de seguridad de Ubuntu
             Tags:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-ws-sg'
