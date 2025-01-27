@@ -10,10 +10,10 @@ https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-
 
 ## :collision: Configuración del entorno en el Learner Lab
 
-![ConfigurarEntornoLearnerLab.PNG](imagenes/ConfigurarEntornoLearnerLab.PNG)
+![AWS_Academy_Cloudformation.PNG](imagenes/AWS_Academy_Cloudformation.PNG)
 
 
-## Creación del entorno con un parámetro de entrada que será el NN del alumno
+## :white_check_mark: Creación del entorno con un parámetro de entrada que será el NN del alumno
 
 ```git
 git clone https://github.com/javiteran/AWS_CloudFormation.git
@@ -70,7 +70,7 @@ Si quieres ver todos los elementos creados con la pila y sus datos:
 aws cloudformation describe-stack-events --stack-name Lab03
 ```
 
-# Eliminar la pila
+# :x: Eliminar la pila
 
 ```aws-cli
 aws cloudformation delete-stack --stack-name Lab03
@@ -78,8 +78,19 @@ aws cloudformation delete-stack --stack-name Lab03
 aws cloudformation describe-stacks --stack-name Lab03
 ```
 
-# Validar la plantilla
+# :ballot_box_with_check: Validar la plantilla
 
 ```aws-cli
 aws cloudformation validate-template --template-body file://00AWSLab01_dualstack.yaml
 ```
+
+
+# :trident: AWS Academy y AWS Cli
+
+Si prefieres utilizar AWS cli para el AWS Academy también puedes utilizar el repositorio de AWS Cli en:
+
+https://github.com/javiteran/AWS_Cli
+
+Utiliza bash y todos los comandos del aws-cli para automatizar la creación de entornos en AWS.
+
+![ConfigurarEntornoLearnerLab.PNG](imagenes/ConfigurarEntornoLearnerLab.PNG)
