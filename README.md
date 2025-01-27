@@ -84,7 +84,6 @@ aws cloudformation describe-stacks --stack-name Lab03
 aws cloudformation validate-template --template-body file://00AWSLab01_dualstack.yaml
 ```
 
-
 # :trident: AWS Academy y AWS Cli
 
 Si prefieres utilizar AWS cli para el AWS Academy también puedes utilizar el repositorio de AWS Cli en:
