@@ -11,11 +11,12 @@ Description: >
   Autor: Javier Teran Gonzalez
   Fecha creacion:     04/04/2024
   
-  Version: 1.10
+  Version: 1.12
   Modificaciones: 16/04/2024. Cambiar AMIs de Ubuntu y Windows
                   16/04/2024. Crear las instancias tambien con IPv6
                   11/10/2024. Crear dos subredes privadas con sus rutas. 
                               Crear variables export para utilizar en otra plantilla. Ej: RDS
+                  27/01/2025. Completa reglas grupos de seguridad. Cambio espacio disco ubuntu 
 Parameters:
     NombreProyecto:
         Description: 'Nombre del proyecto'
