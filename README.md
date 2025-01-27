@@ -6,7 +6,7 @@ Muestra una posible solución de automatización de la creación de entornos de 
 
 ## :gear: Referencia de comandos AWS CloudFormation
 
-https://awscli.amazonaws.com/v2/documentation/api/latest/reference/ec2/index.html#cli-aws-ec2
+https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-instance.html
 
 ## :collision: Configuración del entorno en el Learner Lab
 
@@ -18,7 +18,8 @@ https://awscli.amazonaws.com/v2/documentation/api/latest/reference/ec2/index.htm
 ```git
 git clone https://github.com/javiteran/AWS_CloudFormation.git
 cd AWS_CloudFormation
-00AWSLab01_dualstack.yaml
+
+aws cloudformation create-stack --stack-name Lab03 --template-body file:00AWSLab01_dualstack.yaml --parameters ParameterKey=NN,ParameterValue=03
 ```
 
 Con este fichero se creará el siguiente entorno de tareas:
@@ -37,8 +38,34 @@ Creará:
 * Se abrirán los puertos 80, 22 y 3389 para Windows y el 53 y 80  para Ubuntu.
 * Se permitirá todo el tráfico entre las instancias de la VPC.
 * Una instancia EC2 con Windows Server 2022 
-* Una instancia EC2 con Ubuntu Server 24.04
+  * Instancia t2.medium
+  * PublicSubnet2
+  * Dirección IPv4 privada 10.24.1NN.200/25
+  * IIS
+
+* Una instancia EC2 con Ubuntu Server 24.04 
+  * Instancia t2.micro
+  * PublicSubnet1
+  * Disco principal de 20Gb
+  * Dirección IPv4 privada 10.24.1NN.200/25
+  * Apache2
 * En Ubuntu y Windows se instalarán servicios y roles como DNS para probar la instalación en la creación.
 * Direcciones IPs públicas estáticas para las instancias EC2
 
 * Creación de variables export para utilizar con otra plantilla de CloudFormation. Ejemplo: añadir un RDS
+
+## Verificación de la creación del stack
+
+Para ver el estado del stack/pila
+
+```aws-cli
+aws cloudformation describe-stacks --stack-name Lab03
+
+```
+
+## Verificación de los eventos del stack
+Si quieres ver todos los elementos creados con la pila y sus datos:
+
+```aws-cli
+aws cloudformation describe-stack-events --stack-name Lab03
+```

@@ -31,11 +31,11 @@ Parameters:
     AMIUbuntu:
         Description: 'AMI ID Ubuntu Server 24.04'
         Type: String
-        Default: 'ami-0866a3c8686eaeeba'    
+        Default: 'ami-04b4f1a9cf54c11d0'    
     AMIWindows:
         Description: 'AMI ID Windows Server 2022'
         Type: String
-        Default: 'ami-0888db1202897905c' 
+        Default: 'ami-0a0ebee827a585d06' 
 Resources:
     VPC:
         Type: AWS::EC2::VPC
@@ -72,7 +72,7 @@ Resources:
     #    Type: AWS::EC2::EgressOnlyInternetGateway
     #    Properties: 
     #      VpcId: !Ref VPC
-   
+
     # Tabla de rutas publica
 
     TablaRutasPublica:
@@ -126,7 +126,7 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.1${NN}.0/24'
+            CidrBlock: !Sub '10.24.1${NN}.0/25'
             Ipv6CidrBlock:  !Select [1, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             #Ipv6CidrBlock: !GetAtt 'VPC.Ipv6CidrBlocks.0'
             AssignIpv6AddressOnCreation: true
@@ -139,7 +139,7 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.2${NN}.0/24'
+            CidrBlock: !Sub '10.24.1${NN}.128/25'
             Ipv6CidrBlock:  !Select [2, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 1, !GetAZs '' ]
@@ -167,7 +167,7 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.${NN}.0/25'
+            CidrBlock: !Sub '10.24.2${NN}.0/25'
             Ipv6CidrBlock:  !Select [3, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 0, !GetAZs '' ]
@@ -179,7 +179,7 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.${NN}.128/25'
+            CidrBlock: !Sub '10.24.2${NN}.128/25'
             Ipv6CidrBlock:  !Select [4, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 1, !GetAZs '' ]
@@ -213,42 +213,52 @@ Resources:
                 FromPort: 53
                 ToPort: 53
                 CidrIp: 0.0.0.0/0
-                Description: Allow DNS(TCP)
+                Description: Allow DNS(TCP) IPv4
               - IpProtocol: udp
                 FromPort: 53
                 ToPort: 53
                 CidrIp: 0.0.0.0/0
-                Description: Allow DNS(UDP)
+                Description: Allow DNS(UDP) IPv4
               - IpProtocol: tcp
                 FromPort: 80
                 ToPort: 80
                 CidrIp: 0.0.0.0/0
-                Description: Allow HTTP                
+                Description: Allow HTTP IPv4       
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIp: 0.0.0.0/0
+                Description: Allow HTTPS IPv4           
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIp: 0.0.0.0/0
+                Description: Allow SSH IPv4
+              - IpProtocol: tcp
+                FromPort: 53
+                ToPort: 53
+                CidrIp: ::/0
+                Description: Allow DNS(TCP) IPv6
+              - IpProtocol: udp
+                FromPort: 53
+                ToPort: 53
+                CidrIp: ::/0
+                Description: Allow DNS(UDP) IPv6
               - IpProtocol: tcp
                 FromPort: 80
                 ToPort: 80
                 CidrIpv6: ::/0
-                Description: Allow HTTP                
-              - IpProtocol: tcp
-                FromPort: 443
-                ToPort: 443
-                CidrIp: 0.0.0.0/0
-                Description: Allow HTTPS                
+                Description: Allow HTTP IPv6           
               - IpProtocol: tcp
                 FromPort: 443
                 ToPort: 443
                 CidrIpv6: ::/0
-                Description: Allow HTTPS                
-              - IpProtocol: tcp
-                FromPort: 22
-                ToPort: 22
-                CidrIp: 0.0.0.0/0
-                Description: Allow SSH
+                Description: Allow HTTPS IPv6            
               - IpProtocol: tcp
                 FromPort: 22
                 ToPort: 22
                 CidrIpv6: ::/0
-                Description: Allow SSH
+                Description: Allow SSH IPv6
             Tags:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-us-sg'
@@ -276,6 +286,12 @@ Resources:
           Tags:
             - Key: Name
               Value: !Sub '${NombreProyecto}${NN}-us'
+          BlockDeviceMappings:
+            - DeviceName: /dev/sda1  # El volumen raíz de la instancia
+              Ebs:
+                VolumeSize: 20  # Tamaño del volumen en GB
+                VolumeType: gp3  # Tipo de volumen
+                DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
     UbuntuElasticIp:
         Type: AWS::EC2::EIP
         Properties:
@@ -296,53 +312,58 @@ Resources:
                 FromPort: 3389
                 ToPort: 3389
                 CidrIp: 0.0.0.0/0
-                Description: Allow RDP
+                Description: Allow RDP IPv4
               - IpProtocol: tcp
                 FromPort: 53
                 ToPort: 53
                 CidrIp: 0.0.0.0/0
-                Description: Allow DNS(TCP)
+                Description: Allow DNS(TCP) IPv4
               - IpProtocol: udp
                 FromPort: 53
                 ToPort: 53
                 CidrIp: 0.0.0.0/0
-                Description: Allow DNS(UDP)
+                Description: Allow DNS(UDP) IPv4
               - IpProtocol: tcp
                 FromPort: 80
                 ToPort: 80
                 CidrIp: 0.0.0.0/0
-                Description: Allow HTTP
+                Description: Allow HTTP IPv4
+              - IpProtocol: tcp
+                FromPort: 3389
+                ToPort: 3389
+                CidrIp: ::/0
+                Description: Allow RDP IPv6
               - IpProtocol: tcp
                 FromPort: 53
                 ToPort: 53
                 CidrIpv6: ::/0
-                Description: Allow DNS(TCP)
+                Description: Allow DNS(TCP) IPv6
               - IpProtocol: udp
                 FromPort: 53
                 ToPort: 53
                 CidrIpv6: ::/0
-                Description: Allow DNS(UDP)
+                Description: Allow DNS(UDP) IPv6
               - IpProtocol: tcp
                 FromPort: 80
                 ToPort: 80
                 CidrIpv6: ::/0
-                Description: Allow HTTP
-
+                Description: Allow HTTP IPv6
+              - IpProtocol: "-1"  # El valor "-1" permite todo el tráfico (todos los protocolos)
+                SourceSecurityGroupId: !- !Ref UbuntuSecurityGroup
             Tags:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-ws-sg'
-
     # Creacion de instancia Windows
     WindowsInstance:
         Type: AWS::EC2::Instance
         Properties:
             ImageId: !Ref AMIWindows
-            InstanceType: t2.small
+            InstanceType: t2.medium
             KeyName: vockey
             Monitoring: false
             SecurityGroupIds:
                 - !Ref WindowsSecurityGroup
-            SubnetId: !Ref PublicSubnet1
+            SubnetId: !Ref PublicSubnet2
             PrivateIpAddress: !Sub '10.24.1${NN}.200'
             UserData: # Instala IIS
               Fn::Base64: !Sub |
