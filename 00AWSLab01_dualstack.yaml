@@ -213,52 +213,52 @@ Resources:
                 FromPort: 53
                 ToPort: 53
                 CidrIp: 0.0.0.0/0
-                Description: Allow DNS(TCP) IPv4
+                Description: Permitir DNS(TCP) IPv4
               - IpProtocol: udp
                 FromPort: 53
                 ToPort: 53
                 CidrIp: 0.0.0.0/0
-                Description: Allow DNS(UDP) IPv4
+                Description: Permitir DNS(UDP) IPv4
               - IpProtocol: tcp
                 FromPort: 80
                 ToPort: 80
                 CidrIp: 0.0.0.0/0
-                Description: Allow HTTP IPv4       
+                Description: Permitir HTTP IPv4       
               - IpProtocol: tcp
                 FromPort: 443
                 ToPort: 443
                 CidrIp: 0.0.0.0/0
-                Description: Allow HTTPS IPv4           
+                Description: Permitir HTTPS IPv4           
               - IpProtocol: tcp
                 FromPort: 22
                 ToPort: 22
                 CidrIp: 0.0.0.0/0
-                Description: Allow SSH IPv4
+                Description: Permitir SSH IPv4
               - IpProtocol: tcp
                 FromPort: 53
                 ToPort: 53
                 CidrIpv6: ::/0
-                Description: Allow DNS(TCP) IPv6
+                Description: Permitir DNS(TCP) IPv6
               - IpProtocol: udp
                 FromPort: 53
                 ToPort: 53
                 CidrIpv6: ::/0
-                Description: Allow DNS(UDP) IPv6
+                Description: Permitir DNS(UDP) IPv6
               - IpProtocol: tcp
                 FromPort: 80
                 ToPort: 80
                 CidrIpv6: ::/0
-                Description: Allow HTTP IPv6           
+                Description: Permitir HTTP IPv6           
               - IpProtocol: tcp
                 FromPort: 443
                 ToPort: 443
                 CidrIpv6: ::/0
-                Description: Allow HTTPS IPv6            
+                Description: Permitir HTTPS IPv6            
               - IpProtocol: tcp
                 FromPort: 22
                 ToPort: 22
                 CidrIpv6: ::/0
-                Description: Allow SSH IPv6
+                Description: Permitir SSH IPv6
             Tags:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-us-sg'
@@ -312,42 +312,42 @@ Resources:
                 FromPort: 3389
                 ToPort: 3389
                 CidrIp: 0.0.0.0/0
-                Description: Allow RDP IPv4
+                Description: Permitir RDP IPv4
               - IpProtocol: tcp
                 FromPort: 53
                 ToPort: 53
                 CidrIp: 0.0.0.0/0
-                Description: Allow DNS(TCP) IPv4
+                Description: Permitir DNS(TCP) IPv4
               - IpProtocol: udp
                 FromPort: 53
                 ToPort: 53
                 CidrIp: 0.0.0.0/0
-                Description: Allow DNS(UDP) IPv4
+                Description: Permitir DNS(UDP) IPv4
               - IpProtocol: tcp
                 FromPort: 80
                 ToPort: 80
                 CidrIp: 0.0.0.0/0
-                Description: Allow HTTP IPv4
+                Description: Permitir HTTP IPv4
               - IpProtocol: tcp
                 FromPort: 3389
                 ToPort: 3389
                 CidrIpv6: ::/0
-                Description: Allow RDP IPv6
+                Description: Permitir RDP IPv6
               - IpProtocol: tcp
                 FromPort: 53
                 ToPort: 53
                 CidrIpv6: ::/0
-                Description: Allow DNS(TCP) IPv6
+                Description: Permitir DNS(TCP) IPv6
               - IpProtocol: udp
                 FromPort: 53
                 ToPort: 53
                 CidrIpv6: ::/0
-                Description: Allow DNS(UDP) IPv6
+                Description: Permitir DNS(UDP) IPv6
               - IpProtocol: tcp
                 FromPort: 80
                 ToPort: 80
                 CidrIpv6: ::/0
-                Description: Allow HTTP IPv6
+                Description: Permitir HTTP IPv6
               - IpProtocol: '-1'
                 SourceSecurityGroupId: !Ref UbuntuSecurityGroup
                 Description: Permitir trafico desde el grupo de seguridad de Ubuntu

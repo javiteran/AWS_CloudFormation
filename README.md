@@ -19,7 +19,7 @@ https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-
 git clone https://github.com/javiteran/AWS_CloudFormation.git
 cd AWS_CloudFormation
 
-aws cloudformation create-stack --stack-name Lab03 --template-body file:00AWSLab01_dualstack.yaml --parameters ParameterKey=NN,ParameterValue=03
+aws cloudformation create-stack --stack-name Lab03 --template-body file://00AWSLab01_dualstack.yaml --parameters ParameterKey=NN,ParameterValue=03
 ```
 
 Con este fichero se creará el siguiente entorno de tareas:
@@ -68,4 +68,18 @@ Si quieres ver todos los elementos creados con la pila y sus datos:
 
 ```aws-cli
 aws cloudformation describe-stack-events --stack-name Lab03
+```
+
+# Eliminar la pila
+
+```aws-cli
+aws cloudformation delete-stack --stack-name Lab03
+
+aws cloudformation describe-stacks --stack-name Lab03
+```
+
+# Validar la plantilla
+
+```aws-cli
+aws cloudformation validate-template --template-body file://00AWSLab01_dualstack.yaml
 ```
