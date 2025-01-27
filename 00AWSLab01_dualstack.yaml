@@ -237,12 +237,12 @@ Resources:
               - IpProtocol: tcp
                 FromPort: 53
                 ToPort: 53
-                CidrIp: ::/0
+                CidrIpv6: ::/0
                 Description: Allow DNS(TCP) IPv6
               - IpProtocol: udp
                 FromPort: 53
                 ToPort: 53
-                CidrIp: ::/0
+                CidrIpv6: ::/0
                 Description: Allow DNS(UDP) IPv6
               - IpProtocol: tcp
                 FromPort: 80
@@ -331,7 +331,7 @@ Resources:
               - IpProtocol: tcp
                 FromPort: 3389
                 ToPort: 3389
-                CidrIp: ::/0
+                CidrIpv6: ::/0
                 Description: Allow RDP IPv6
               - IpProtocol: tcp
                 FromPort: 53
