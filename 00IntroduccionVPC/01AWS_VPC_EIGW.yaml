@@ -48,6 +48,16 @@ Resources:
             VpcId: !Ref VPC
             InternetGatewayId: !Ref InternetGateway
 
+    # Puerta de enlace de internet solo de salida para IPv6 EIGW    
+    MiEgressOnlyInternetGateway:
+        Type: AWS::EC2::EgressOnlyInternetGateway
+        Properties: 
+            VpcId: !Ref VPC
+    # No tiene tags
+    #        Tags:
+    #            - Key: Name
+    #              Value: !Sub '${NombreProyecto}${NN}-eigw'
+
     # Tabla de rutas publica
     TablaRutasPublica:
         Type: AWS::EC2::RouteTable
@@ -91,7 +101,24 @@ Resources:
             DestinationIpv6CidrBlock: ::/0
             GatewayId: !Ref InternetGateway
 
-we    # SubRedes publicas
+    # Rutas por defecto para las tabla de rutas privadas. Para IPv6 de solo salida
+    DefaultRouteIPv6SoloSalida1:
+        Type: AWS::EC2::Route
+        DependsOn: MiEgressOnlyInternetGateway
+        Properties:
+            RouteTableId: !Ref TablaRutasPrivada1
+            DestinationIpv6CidrBlock: ::/0
+            EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
+
+    DefaultRouteIPv6SoloSalida2:
+        Type: AWS::EC2::Route
+        DependsOn: MiEgressOnlyInternetGateway
+        Properties:
+            RouteTableId: !Ref TablaRutasPrivada2
+            DestinationIpv6CidrBlock: ::/0
+            EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
+
+    # SubRedes publicas
     SubredPublica1:
         Type: AWS::EC2::Subnet
         Properties:
@@ -170,15 +197,6 @@ we    # SubRedes publicas
         Properties:
             SubnetId: !Ref SubredPrivada2
             RouteTableId: !Ref TablaRutasPrivada2
-
-
-
-
-
-
-
-
-
 
 Outputs:
     Proyecto:
