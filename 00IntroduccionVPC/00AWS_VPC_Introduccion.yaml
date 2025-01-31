@@ -91,7 +91,7 @@ Resources:
             DestinationIpv6CidrBlock: ::/0
             GatewayId: !Ref InternetGateway
 
-we    # SubRedes publicas
+    # SubRedes publicas
     SubredPublica1:
         Type: AWS::EC2::Subnet
         Properties:
@@ -170,15 +170,6 @@ we    # SubRedes publicas
         Properties:
             SubnetId: !Ref SubredPrivada2
             RouteTableId: !Ref TablaRutasPrivada2
-
-
-
-
-
-
-
-
-
 
 Outputs:
     Proyecto:
