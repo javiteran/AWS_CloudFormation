@@ -208,7 +208,7 @@ Outputs:
         Export:
             Name: "MiVPCID"  
     PosiblesRedesIPv4:
-        Description: "Bloque primario CIDR IPv4 en la VPC con 16 subredes /22 (32-10) "
+        Description: "Bloque primario CIDR IPv4 en la VPC con 16 subredes /20 (32-12) "
         Value: !Join [ ", ", !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
     PosiblesRedesIPv6:
         Description: "Bloques CIDR IPv6 en la VPC y 256 redes /64"
