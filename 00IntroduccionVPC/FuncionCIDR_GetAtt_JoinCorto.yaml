@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+    Funciones !GetAtt, !Join y !Cidr en una plantilla de CloudFormation.
+
+    Autor: Javier Teran Gonzalez. https://www.youtube.com/javiteran
+    Fecha creacion:     09/02/2025
+    Version: 1.00
+
+#Parametros del proyecto. No son obligatorios
+Parameters:
+    NombreProyecto:
+        Description: 'Nombre del proyecto'
+        Type: String
+        Default: 'ASIR24'         
+
+#Recursos del proyecto        
+Resources:
+    VPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: 10.24.0.0/16
+            EnableDnsHostnames: true
+            EnableDnsSupport: true
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}-vpc'
+    IPv6CidrBlock:
+        Type: AWS::EC2::VPCCidrBlock
+        Properties:
+            VpcId: !Ref VPC
+            AmazonProvidedIpv6CidrBlock: true
+Outputs:
+    VPCId:
+        Description: "VPC ID"
+        Value: !Ref VPC
+        Export:
+            Name: "MiVPCID"  
+    PosiblesRedesIPv4:
+        Description: "Bloques CIDR IPv4 en la VPC"
+        Value: !Join [ ", ", !Cidr [!GetAtt VPC.CidrBlock, 16, 12]]
+    PosiblesRedesIPv6:
+        Description: "Bloques CIDR IPv6 /64 en la VPC"
+        Value: !Join [ ", ", !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+        # 256 es el número de redes que deseamos obtener con un bloque /64. 
+        # Recuerdo que Amazon proporciona un bloque /56 por VPC. Eso dan 8 bits para redes. 
+        # 2^8 = 256 redes.

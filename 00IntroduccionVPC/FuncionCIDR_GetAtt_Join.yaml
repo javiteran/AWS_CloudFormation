@@ -1,0 +1,236 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+    Uso de las funciones !GetAtt, !Join y !Cidr en una plantilla de CloudFormation.
+    Creacion de una VPC, 4 subredes publicas y privadas, internet gateway y tabla de rutas con IPv4 e IPv6
+
+    Autor: Javier Teran Gonzalez. https://www.youtube.com/javiteran
+    Fecha creacion:     09/02/2025
+    Version: 1.00
+
+#Parametros del proyecto. No son obligatorios
+Parameters:
+    NombreProyecto:
+        Description: 'Nombre del proyecto'
+        Type: String
+        Default: 'ASIR24'         
+    NN:
+        Type: Number
+        Description: 'Numero de alumno'
+        Default: 15
+        ConstraintDescription: 'Debe estar en el rango del [1-50]'
+        MinValue: 1
+        MaxValue: 50
+
+#Recursos del proyecto        
+Resources:
+    VPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: 10.24.0.0/16
+            EnableDnsHostnames: true
+            EnableDnsSupport: true
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-vpc'
+    IPv6CidrBlock:
+        Type: AWS::EC2::VPCCidrBlock
+        Properties:
+            VpcId: !Ref VPC
+            AmazonProvidedIpv6CidrBlock: true
+
+    # SubRedes publicas
+    SubredPublica1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock:      !Select [0, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [0, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPublica1'
+
+    SubredPublica2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock:      !Select [1, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [1, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPublica2'
+
+    # SubRedes privadas
+
+    SubredPrivada1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock:      !Select [2, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [2, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPrivada1'
+
+    SubredPrivada2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock:      !Select [3, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [3, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPrivada2'
+
+    # Internet Gateway y EgressOnlyInternetGateway
+    InternetGateway:
+        Type: AWS::EC2::InternetGateway
+        Properties:
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-igw'
+
+    VPCGatewayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            VpcId: !Ref VPC
+            InternetGatewayId: !Ref InternetGateway
+
+    # Puerta de enlace de internet solo de salida para IPv6 EIGW    
+    MiEgressOnlyInternetGateway:
+        Type: AWS::EC2::EgressOnlyInternetGateway
+        Properties: 
+            VpcId: !Ref VPC
+
+    # Tabla de rutas publica
+    TablaRutasPublica:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-rtb-publica'
+
+    # Tablas de rutas privadas
+    TablaRutasPrivada1:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                -   Key: "Name"
+                    Value: !Sub '${NombreProyecto}${NN}-rtb-privada1'
+
+    TablaRutasPrivada2:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                -   Key: "Name"
+                    Value: !Sub '${NombreProyecto}${NN}-rtb-privada2'
+
+    # Rutas por defecto para la tabla de rutas publica. Tanto IPv4 como IPv6
+    DefaultRouteIPv4:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref TablaRutasPublica
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: !Ref InternetGateway
+    
+    DefaultRouteIPv6:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref TablaRutasPublica
+            DestinationIpv6CidrBlock: ::/0
+            GatewayId: !Ref InternetGateway
+
+    # Rutas por defecto para las tabla de rutas privadas. Para IPv6 de solo salida.
+    # Las instancias en subredes privadas pueden salir a internet pero no se puede acceder a ellas desde internet.
+    DefaultRouteIPv6SoloSalida1:
+        Type: AWS::EC2::Route
+        DependsOn: MiEgressOnlyInternetGateway
+        Properties:
+            RouteTableId: !Ref TablaRutasPrivada1
+            DestinationIpv6CidrBlock: ::/0
+            EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
+
+    DefaultRouteIPv6SoloSalida2:
+        Type: AWS::EC2::Route
+        DependsOn: MiEgressOnlyInternetGateway
+        Properties:
+            RouteTableId: !Ref TablaRutasPrivada2
+            DestinationIpv6CidrBlock: ::/0
+            EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
+
+    # Asociacion de subredes publicas con tabla de rutas
+    SubnetRouteTableAssociation1:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPublica1
+            RouteTableId: !Ref TablaRutasPublica
+
+    SubnetRouteTableAssociation2:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPublica2
+            RouteTableId: !Ref TablaRutasPublica
+
+    # Asociacion de subredes privadas con sus tablas de rutas
+    SubnetRouteTableAssociation3:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPrivada1
+            RouteTableId: !Ref TablaRutasPrivada1
+
+    SubnetRouteTableAssociation4:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPrivada2
+            RouteTableId: !Ref TablaRutasPrivada2
+
+Outputs:
+    Proyecto:
+        Description: Nombre del proyecto
+        Value: !Sub '${NombreProyecto}${NN}'
+        Export:
+            Name:  "Proyecto"
+    VPCId:
+        Description: "VPC ID"
+        Value: !Ref VPC
+        Export:
+            Name: "MiVPCID"  
+    PosiblesRedesIPv4:
+        Description: "Bloque primario CIDR IPv4 en la VPC con 16 subredes /22 (32-10) "
+        Value: !Join [ ", ", !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+    PosiblesRedesIPv6:
+        Description: "Bloques CIDR IPv6 en la VPC y 256 redes /64"
+        Value: !Join [ ", ", !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 256, 64]]
+        # 256 es el número de redes que deseamos obtener con un bloque /64. 
+        # Recuerdo que Amazon proporciona un bloque /56 por VPC. Eso dan 8 bits para redes. 
+        # 2^8 = 256 redes.
+    SubredPublica1Id:
+        Description: "SubredPublica1 ID"
+        Value: !Ref SubredPublica1
+    SubredPublica2Id:
+        Description: "SubredPublica2 ID"
+        Value: !Ref SubredPublica2
+    SubredPrivada1Id:
+        Description: "SubredPrivada1 ID"
+        Value: !Ref SubredPrivada1
+        Export:
+            Name: "MiSubredPrivada1ID"  # Exporta el ID de la SubredPrivada1
+    SubredPrivada2Id:
+        Description: "SubredPrivada2 ID"
+        Value: !Ref SubredPrivada2
+        Export:
+            Name: "MiSubredPrivada2ID"  # Exporta el ID de la SubredPrivada2
+# Se utilizan los export para poder importar el ID de la VPC en otro stack/pila que quieras ejecutar después de esta pila.
+# Ej: En la plantilla destino utilizar --->   VpcId: !ImportValue MiVPCID
