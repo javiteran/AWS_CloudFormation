@@ -1,0 +1,430 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creacion de una VPC, 4 subredes publicas y privadas, internet gateway, EIGW IPv6 y tabla de rutas con IPv4 e IPv6
+    Ademas creara :
+      - 2 instancias EC2 Ubuntu Server 24.04 en subredes privadas
+      - 1 instancia EC2 Ubuntu Server 24.04 bastión con IPv4 elastica
+  
+  Utilizado CloudFormation para AWS Academy Learning Lab
+  Autor: Javier Teran Gonzalez
+  Fecha creacion:     12/02/2025
+  
+  Version: 1.01
+  Modificaciones: 12/02/2025. Inicio
+                   
+Parameters:
+    NombreProyecto:
+        Description: 'Nombre del proyecto'
+        Type: String
+        Default: 'Balance24'         
+    NN:
+        Type: Number
+        Description: Numero de alumno
+        Default: 15
+        ConstraintDescription: 'Debe estar en el rango del [1-50]'
+        MinValue: 1
+        MaxValue: 50
+    AMIUbuntu:
+        Description: 'AMI ID Ubuntu Server 24.04'
+        Type: String
+        Default: 'ami-04b4f1a9cf54c11d0'    
+
+#Recursos del proyecto        
+Resources:
+    VPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: 10.24.0.0/16
+            EnableDnsHostnames: true
+            EnableDnsSupport: true
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-vpc'
+    IPv6CidrBlock:
+        Type: AWS::EC2::VPCCidrBlock
+        Properties:
+            VpcId: !Ref VPC
+            AmazonProvidedIpv6CidrBlock: true
+
+    # SubRedes publicas
+    SubredPublica1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Sub '10.24.1${NN}.0/25'
+            Ipv6CidrBlock:  !Select [1, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            #Ipv6CidrBlock: !GetAtt 'VPC.Ipv6CidrBlocks.0'
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPublica1'
+
+    SubredPublica2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Sub '10.24.1${NN}.128/25'
+            Ipv6CidrBlock:  !Select [2, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPublica2'
+
+    # SubRedes privadas
+    SubredPrivada1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Sub '10.24.2${NN}.0/25'
+            Ipv6CidrBlock:  !Select [3, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPrivada1'
+
+    SubredPrivada2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Sub '10.24.2${NN}.128/25'
+            Ipv6CidrBlock:  !Select [4, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPrivada2'
+
+    # Internet Gateway y EgressOnlyInternetGateway
+    InternetGateway:
+        Type: AWS::EC2::InternetGateway
+        Properties:
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-igw'
+
+    VPCGatewayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            VpcId: !Ref VPC
+            InternetGatewayId: !Ref InternetGateway
+
+    # Puerta de enlace de internet solo de salida para IPv6 EIGW    
+    MiEgressOnlyInternetGateway:
+        Type: AWS::EC2::EgressOnlyInternetGateway
+        Properties: 
+            VpcId: !Ref VPC
+    # No tiene tags
+    #        Tags:
+    #            - Key: Name
+    #              Value: !Sub '${NombreProyecto}${NN}-eigw'
+
+    # Tabla de rutas publica
+    TablaRutasPublica:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-rtb-publica'
+
+    # Tablas de rutas privadas
+    TablaRutasPrivada1:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                -   Key: "Name"
+                    Value: !Sub '${NombreProyecto}${NN}-rtb-privada1'
+
+    TablaRutasPrivada2:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                -   Key: "Name"
+                    Value: !Sub '${NombreProyecto}${NN}-rtb-privada2'
+
+    # Rutas por defecto para la tabla de rutas publica. Tanto IPv4 como IPv6
+    DefaultRouteIPv4:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref TablaRutasPublica
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: !Ref InternetGateway
+    
+    DefaultRouteIPv6:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref TablaRutasPublica
+            DestinationIpv6CidrBlock: ::/0
+            GatewayId: !Ref InternetGateway
+
+    # Rutas por defecto para las tabla de rutas privadas. Para IPv6 de solo salida.
+    # Las instancias en subredes privadas pueden salir a internet pero no se puede acceder a ellas desde internet.
+    DefaultRouteIPv6SoloSalida1:
+        Type: AWS::EC2::Route
+        DependsOn: MiEgressOnlyInternetGateway
+        Properties:
+            RouteTableId: !Ref TablaRutasPrivada1
+            DestinationIpv6CidrBlock: ::/0
+            EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
+
+    DefaultRouteIPv6SoloSalida2:
+        Type: AWS::EC2::Route
+        DependsOn: MiEgressOnlyInternetGateway
+        Properties:
+            RouteTableId: !Ref TablaRutasPrivada2
+            DestinationIpv6CidrBlock: ::/0
+            EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
+
+    # Asociacion de subredes publicas con tabla de rutas
+    SubnetRouteTableAssociation1:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPublica1
+            RouteTableId: !Ref TablaRutasPublica
+
+    SubnetRouteTableAssociation2:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPublica2
+            RouteTableId: !Ref TablaRutasPublica
+
+    # Asociacion de subredes privadas con sus tablas de rutas
+    SubnetRouteTableAssociation3:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPrivada1
+            RouteTableId: !Ref TablaRutasPrivada1
+
+    SubnetRouteTableAssociation4:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPrivada2
+            RouteTableId: !Ref TablaRutasPrivada2
+
+##### INSTANCIAS
+    # Grupo de seguridad Ubuntu. Puertos HTTP, HTTPS y SSH
+    UbuntuSecurityGroupDestinos:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: !Sub '${NombreProyecto}${NN}-usalb-sg'
+            GroupDescription: !Sub '${NombreProyecto}${NN}-usalb-sg'
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIp: 0.0.0.0/0
+                Description: Permitir HTTP IPv4       
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIp: 0.0.0.0/0
+                Description: Permitir HTTPS IPv4           
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIp: 0.0.0.0/0
+                Description: Permitir SSH IPv4
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIpv6: ::/0
+                Description: Permitir HTTP IPv6           
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIpv6: ::/0
+                Description: Permitir HTTPS IPv6            
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIpv6: ::/0
+                Description: Permitir SSH IPv6
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-usalb-sg'
+
+    # Grupo de seguridad Ubuntu. Puertos DNS, HTTP, HTTPS y SSH
+    UbuntuSecurityGroupBastion:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: !Sub '${NombreProyecto}${NN}-usbastion-sg'
+            GroupDescription: !Sub '${NombreProyecto}${NN}-usbastion-sg'
+            VpcId: !Ref VPC
+            SecurityGroupIngress:           
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIp: 0.0.0.0/0
+                Description: Permitir SSH IPv4            
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIpv6: ::/0
+                Description: Permitir SSH IPv6
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-usbastion-sg'
+
+    BalanceadorSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: !Sub '${NombreProyecto}${NN}-alb-sg'
+            GroupDescription: !Sub '${NombreProyecto}${NN}-alb-sg'
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIp: 0.0.0.0/0
+                Description: Permitir HTTP IPv4       
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIp: 0.0.0.0/0
+                Description: Permitir HTTPS IPv4           
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIpv6: ::/0
+                Description: Permitir HTTP IPv6           
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIpv6: ::/0
+                Description: Permitir HTTPS IPv6            
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-alb-sg'
+
+    # Creacion de instancia Ubuntu
+
+    UbuntuBastion:
+        Type: AWS::EC2::Instance
+        Properties:
+          ImageId: !Ref AMIUbuntu
+          InstanceType: t2.micro
+          KeyName: vockey
+          Monitoring: false
+          SecurityGroupIds:
+              - !Ref UbuntuSecurityGroupBastion
+          SubnetId: !Ref SubredPublica1
+          PrivateIpAddress: !Sub '10.24.1${NN}.100'
+          UserData:
+            Fn::Base64: !Sub |
+              #!/bin/bash
+              echo 'User data para Ubuntu Server'
+              apt-get update -y
+              apt-get upgrade -y
+          Tags:
+            - Key: Name
+              Value: !Sub '${NombreProyecto}${NN}-us-bastion'
+          BlockDeviceMappings:
+            - DeviceName: /dev/sda1  # El volumen raíz de la instancia
+              Ebs:
+                VolumeSize: 20  # Tamaño del volumen en GB
+                VolumeType: gp3  # Tipo de volumen
+                DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
+    UbuntuElasticIp:
+        Type: AWS::EC2::EIP
+        Properties:
+            InstanceId: !Ref UbuntuBastion
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-us-ip'
+
+# Instancias en subredes privadas para los destinos del balanceador
+    UbuntuDestino1:
+        Type: AWS::EC2::Instance
+        Properties:
+          ImageId: !Ref AMIUbuntu
+          InstanceType: t2.micro
+          KeyName: vockey
+          Monitoring: false
+          SecurityGroupIds:
+              - !Ref UbuntuSecurityGroupDestinos 
+          SubnetId: !Ref SubredPrivada1
+          UserData:
+            Fn::Base64: !Sub |
+              #!/bin/bash
+              echo 'User data para Ubuntu Server'
+              apt-get update -y
+              apt-get upgrade -y
+              apt-get install apache2 -y
+          Tags:
+            - Key: Name
+              Value: !Sub '${NombreProyecto}${NN}-us1'
+          BlockDeviceMappings:
+            - DeviceName: /dev/sda1  # El volumen raíz de la instancia
+              Ebs:
+                VolumeSize: 20  # Tamaño del volumen en GB
+                VolumeType: gp3  # Tipo de volumen
+                DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
+
+    UbuntuDestino2:
+        Type: AWS::EC2::Instance
+        Properties:
+          ImageId: !Ref AMIUbuntu
+          InstanceType: t2.micro
+          KeyName: vockey
+          Monitoring: false
+          SecurityGroupIds:
+              - !Ref UbuntuSecurityGroupDestinos 
+          SubnetId: !Ref SubredPrivada2
+          UserData:
+            Fn::Base64: !Sub |
+              #!/bin/bash
+              echo 'User data para Ubuntu Server'
+              apt-get update -y
+              apt-get upgrade -y
+              apt-get install apache2 -y
+          Tags:
+            - Key: Name
+              Value: !Sub '${NombreProyecto}${NN}-us2'
+          BlockDeviceMappings:
+            - DeviceName: /dev/sda1  # El volumen raíz de la instancia
+              Ebs:
+                VolumeSize: 20  # Tamaño del volumen en GB
+                VolumeType: gp3  # Tipo de volumen
+                DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
+
+Outputs:
+    Proyecto:
+        Description: Nombre del proyecto
+        Value: !Sub '${NombreProyecto}${NN}'
+        Export:
+            Name:  "Proyecto"
+    UbuntuInstanceBastion:
+        Description: Ubuntu Instance Public IP
+        Value: !GetAtt UbuntuBastion.PublicIp
+    VPCId:
+        Description: "VPC ID"
+        Value: !Ref VPC
+        Export:
+            Name: "MiVPCID"  # Exporta el ID de la VPC. Utilizo el export para poder importar el ID de la VPC en otro stack
+                             # En la plantilla destino utilizar --->   VpcId: !ImportValue MiVPCID
+    SubredPublica1Id:
+        Description: "Subred Publica 1 ID"
+        Value: !Ref SubredPublica1
+
+    SubredPublica2Id:
+        Description: "Subred Publica 2 ID"
+        Value: !Ref SubredPublica2
+    SubredPrivada1Id:
+        Description: "Subred Privada 1 ID"
+        Value: !Ref SubredPrivada1
+        Export:
+            Name: "MiPrivateSubnet1ID"  # Exporta el ID de la Subnet 1
+    SubredPrivada2Id:
+        Description: "Subred Privada 2 ID"
+        Value: !Ref SubredPrivada2
+        Export:
+            Name: "MiSubredPrivada2ID"  # Exporta el ID de la Subnet 2
