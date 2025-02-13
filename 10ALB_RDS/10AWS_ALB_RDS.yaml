@@ -1,18 +1,16 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Creacion de una VPC, 4 subredes publicas y privadas, internet gateway, EIGW IPv6 y tabla de rutas con IPv4 e IPv6
+    Creacion de una VPC, 4 subredes publicas y privadas, internet gateway, EIGW IPv6 y tabla de rutas con IPv4 e IPv6
     Ademas creara :
-      - 2 instancias EC2 Ubuntu Server 24.04 en subredes privadas
-      - 1 instancia EC2 Ubuntu Server 24.04 bastión con IPv4 elastica
-  
-  Utilizado CloudFormation para AWS Academy Learning Lab
-  Autor: Javier Teran Gonzalez
-  Fecha creacion:     12/02/2025
-  
-  Version: 1.01
-  Modificaciones: 12/02/2025. Inicio
-                   
+        - 2 instancias EC2 Ubuntu Server 24.04 en subredes privadas
+        - 1 instancia EC2 Ubuntu Server 24.04 bastión con IPv4 elastica
+    Utilizado CloudFormation para AWS Academy Learning Lab
+    Autor: Javier Teran Gonzalez
+    Fecha creacion:     12/02/2025
+
+    Version: 1.01
+        Modificaciones: 12/02/2025. Inicio
 Parameters:
     NombreProyecto:
         Description: 'Nombre del proyecto'
@@ -52,8 +50,8 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.1${NN}.0/25'
-            Ipv6CidrBlock:  !Select [1, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            CidrBlock:      !Select [0, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [0, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             #Ipv6CidrBlock: !GetAtt 'VPC.Ipv6CidrBlocks.0'
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 0, !GetAZs '' ]
@@ -65,20 +63,32 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.1${NN}.128/25'
-            Ipv6CidrBlock:  !Select [2, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            CidrBlock:      !Select [1, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [1, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 1, !GetAZs '' ]
             Tags:
                 -   Key: Name
                     Value: !Sub '${NombreProyecto}${NN}-SubredPublica2'
 
+    SubredPublica3:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock:      !Select [2, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [2, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 2, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPublica3'
+
     # SubRedes privadas
     SubredPrivada1:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.2${NN}.0/25'
+            CidrBlock:      !Select [3, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
             Ipv6CidrBlock:  !Select [3, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 0, !GetAZs '' ]
@@ -90,13 +100,25 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock: !Sub '10.24.2${NN}.128/25'
+            CidrBlock:      !Select [4, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
             Ipv6CidrBlock:  !Select [4, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 1, !GetAZs '' ]
             Tags:
                 -   Key: Name
                     Value: !Sub '${NombreProyecto}${NN}-SubredPrivada2'
+
+    SubredPrivada3:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock:      !Select [5, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [5, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 2, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPrivada3'
 
     # Internet Gateway y EgressOnlyInternetGateway
     InternetGateway:
@@ -148,6 +170,15 @@ Resources:
                 -   Key: "Name"
                     Value: !Sub '${NombreProyecto}${NN}-rtb-privada2'
 
+    TablaRutasPrivada3:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                -   Key: "Name"
+                    Value: !Sub '${NombreProyecto}${NN}-rtb-privada3'
+
+
     # Rutas por defecto para la tabla de rutas publica. Tanto IPv4 como IPv6
     DefaultRouteIPv4:
         Type: AWS::EC2::Route
@@ -183,6 +214,14 @@ Resources:
             DestinationIpv6CidrBlock: ::/0
             EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
 
+    DefaultRouteIPv6SoloSalida3:
+        Type: AWS::EC2::Route
+        DependsOn: MiEgressOnlyInternetGateway
+        Properties:
+            RouteTableId: !Ref TablaRutasPrivada3
+            DestinationIpv6CidrBlock: ::/0
+            EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
+
     # Asociacion de subredes publicas con tabla de rutas
     SubnetRouteTableAssociation1:
         Type: AWS::EC2::SubnetRouteTableAssociation
@@ -209,9 +248,15 @@ Resources:
             SubnetId: !Ref SubredPrivada2
             RouteTableId: !Ref TablaRutasPrivada2
 
+    SubnetRouteTableAssociation5:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPrivada3
+            RouteTableId: !Ref TablaRutasPrivada3
+
 ##### INSTANCIAS
     # Grupo de seguridad Ubuntu. Puertos HTTP, HTTPS y SSH
-    UbuntuSecurityGroupDestinos:
+    UbuntuDestinosSecurityGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
             GroupName: !Sub '${NombreProyecto}${NN}-usalb-sg'
@@ -253,7 +298,7 @@ Resources:
                   Value: !Sub '${NombreProyecto}${NN}-usalb-sg'
 
     # Grupo de seguridad Ubuntu. Puertos DNS, HTTP, HTTPS y SSH
-    UbuntuSecurityGroupBastion:
+    UbuntuBastionSecurityGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
             GroupName: !Sub '${NombreProyecto}${NN}-usbastion-sg'
@@ -306,7 +351,6 @@ Resources:
                   Value: !Sub '${NombreProyecto}${NN}-alb-sg'
 
     # Creacion de instancia Ubuntu
-
     UbuntuBastion:
         Type: AWS::EC2::Instance
         Properties:
@@ -315,9 +359,9 @@ Resources:
           KeyName: vockey
           Monitoring: false
           SecurityGroupIds:
-              - !Ref UbuntuSecurityGroupBastion
+              - !Ref UbuntuBastionSecurityGroup
           SubnetId: !Ref SubredPublica1
-          PrivateIpAddress: !Sub '10.24.1${NN}.100'
+          #PrivateIpAddress: !Sub '10.24.1${NN}.100'
           UserData:
             Fn::Base64: !Sub |
               #!/bin/bash
@@ -350,7 +394,7 @@ Resources:
           KeyName: vockey
           Monitoring: false
           SecurityGroupIds:
-              - !Ref UbuntuSecurityGroupDestinos 
+              - !Ref UbuntuDestinosSecurityGroup 
           SubnetId: !Ref SubredPrivada1
           UserData:
             Fn::Base64: !Sub |
@@ -377,7 +421,7 @@ Resources:
           KeyName: vockey
           Monitoring: false
           SecurityGroupIds:
-              - !Ref UbuntuSecurityGroupDestinos 
+              - !Ref UbuntuDestinosSecurityGroup 
           SubnetId: !Ref SubredPrivada2
           UserData:
             Fn::Base64: !Sub |
@@ -395,6 +439,78 @@ Resources:
                 VolumeSize: 20  # Tamaño del volumen en GB
                 VolumeType: gp3  # Tipo de volumen
                 DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
+
+    UbuntuDestino3:
+        Type: AWS::EC2::Instance
+        Properties:
+          ImageId: !Ref AMIUbuntu
+          InstanceType: t2.micro
+          KeyName: vockey
+          Monitoring: false
+          SecurityGroupIds:
+              - !Ref UbuntuDestinosSecurityGroup 
+          SubnetId: !Ref SubredPrivada3
+          UserData:
+            Fn::Base64: !Sub |
+              #!/bin/bash
+              echo 'User data para Ubuntu Server'
+              apt-get update -y
+              apt-get upgrade -y
+              apt-get install apache2 -y
+          Tags:
+            - Key: Name
+              Value: !Sub '${NombreProyecto}${NN}-us3'
+          BlockDeviceMappings:
+            - DeviceName: /dev/sda1  # El volumen raíz de la instancia
+              Ebs:
+                VolumeSize: 20  # Tamaño del volumen en GB
+                VolumeType: gp3  # Tipo de volumen
+                DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
+
+    MyLoadBalancer:
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+        Properties:
+            Name: !Sub '${AWS::StackName}-alb'
+            Scheme: internet-facing
+            Subnets:
+                - !Ref SubredPublica1
+                - !Ref SubredPublica2
+                - !Ref SubredPublica3
+            SecurityGroups:
+                - !Ref BalanceadorSecurityGroup
+            Tags:
+                - Key: Name
+                  Value: !Sub '${AWS::StackName}-alb'
+
+    MyTargetGroup:
+        Type: AWS::ElasticLoadBalancingV2::TargetGroup
+        Properties:
+            Name: !Sub '${AWS::StackName}-tg'
+            VpcId: !Ref VPC
+            Port: 80
+            Protocol: HTTP
+            TargetType: instance
+            HealthCheckIntervalSeconds: 30
+            HealthCheckPath: /index.html
+            HealthCheckProtocol: HTTP
+            HealthCheckTimeoutSeconds: 5
+            HealthyThresholdCount: 5
+            UnhealthyThresholdCount: 2
+            Matcher:
+                HttpCode: 200
+            Tags:
+                - Key: Name
+                  Value: !Sub '${AWS::StackName}-tg'
+
+    MyListener:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Properties:
+            DefaultActions:
+                - Type: forward
+                  TargetGroupArn: !Ref MyTargetGroup
+            LoadBalancerArn: !Ref MyLoadBalancer
+            Port: 80
+            Protocol: HTTP
 
 Outputs:
     Proyecto:
