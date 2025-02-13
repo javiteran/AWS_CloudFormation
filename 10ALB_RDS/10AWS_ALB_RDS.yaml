@@ -52,7 +52,6 @@ Resources:
             VpcId: !Ref VPC
             CidrBlock:      !Select [0, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
             Ipv6CidrBlock:  !Select [0, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
-            #Ipv6CidrBlock: !GetAtt 'VPC.Ipv6CidrBlocks.0'
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 0, !GetAZs '' ]
             Tags:
@@ -88,8 +87,8 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock:      !Select [3, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
-            Ipv6CidrBlock:  !Select [3, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            CidrBlock:      !Select [6, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [6, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 0, !GetAZs '' ]
             Tags:
@@ -100,8 +99,8 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock:      !Select [4, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
-            Ipv6CidrBlock:  !Select [4, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            CidrBlock:      !Select [7, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [7, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 1, !GetAZs '' ]
             Tags:
@@ -112,8 +111,8 @@ Resources:
         Type: AWS::EC2::Subnet
         Properties:
             VpcId: !Ref VPC
-            CidrBlock:      !Select [5, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
-            Ipv6CidrBlock:  !Select [5, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            CidrBlock:      !Select [8, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [8, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 2, !GetAZs '' ]
             Tags:
@@ -159,7 +158,7 @@ Resources:
         Properties:
             VpcId: !Ref VPC
             Tags:
-                -   Key: "Name"
+                -   Key: 'Name'
                     Value: !Sub '${NombreProyecto}${NN}-rtb-privada1'
 
     TablaRutasPrivada2:
@@ -167,7 +166,7 @@ Resources:
         Properties:
             VpcId: !Ref VPC
             Tags:
-                -   Key: "Name"
+                -   Key: 'Name'
                     Value: !Sub '${NombreProyecto}${NN}-rtb-privada2'
 
     TablaRutasPrivada3:
@@ -175,7 +174,7 @@ Resources:
         Properties:
             VpcId: !Ref VPC
             Tags:
-                -   Key: "Name"
+                -   Key: 'Name'
                     Value: !Sub '${NombreProyecto}${NN}-rtb-privada3'
 
 
@@ -269,11 +268,6 @@ Resources:
                 CidrIp: 0.0.0.0/0
                 Description: Permitir HTTP IPv4       
               - IpProtocol: tcp
-                FromPort: 443
-                ToPort: 443
-                CidrIp: 0.0.0.0/0
-                Description: Permitir HTTPS IPv4           
-              - IpProtocol: tcp
                 FromPort: 22
                 ToPort: 22
                 CidrIp: 0.0.0.0/0
@@ -283,11 +277,6 @@ Resources:
                 ToPort: 80
                 CidrIpv6: ::/0
                 Description: Permitir HTTP IPv6           
-              - IpProtocol: tcp
-                FromPort: 443
-                ToPort: 443
-                CidrIpv6: ::/0
-                Description: Permitir HTTPS IPv6            
               - IpProtocol: tcp
                 FromPort: 22
                 ToPort: 22
@@ -361,6 +350,7 @@ Resources:
           SecurityGroupIds:
               - !Ref UbuntuBastionSecurityGroup
           SubnetId: !Ref SubredPublica1
+          Ipv6AddressCount: 1 # Asigna una direccion IPv6
           #PrivateIpAddress: !Sub '10.24.1${NN}.100'
           UserData:
             Fn::Base64: !Sub |
@@ -470,7 +460,8 @@ Resources:
     MyLoadBalancer:
         Type: AWS::ElasticLoadBalancingV2::LoadBalancer
         Properties:
-            Name: !Sub '${AWS::StackName}-alb'
+            #Name: !Sub '${AWS::StackName}-alb'
+            Name: !Sub '${NombreProyecto}${NN}-alb'
             Scheme: internet-facing
             Subnets:
                 - !Ref SubredPublica1
@@ -480,12 +471,13 @@ Resources:
                 - !Ref BalanceadorSecurityGroup
             Tags:
                 - Key: Name
-                  Value: !Sub '${AWS::StackName}-alb'
+                  Value: !Sub '${NombreProyecto}${NN}-alb'
 
     MyTargetGroup:
         Type: AWS::ElasticLoadBalancingV2::TargetGroup
         Properties:
-            Name: !Sub '${AWS::StackName}-tg'
+            #Name: !Sub '${AWS::StackName}-tg'
+            Name: !Sub '${NombreProyecto}${NN}-tg'
             VpcId: !Ref VPC
             Port: 80
             Protocol: HTTP
@@ -498,9 +490,13 @@ Resources:
             UnhealthyThresholdCount: 2
             Matcher:
                 HttpCode: 200
+            Targets:
+                - Id: !Ref UbuntuDestino1
+                - Id: !Ref UbuntuDestino2
+                - Id: !Ref UbuntuDestino3                
             Tags:
                 - Key: Name
-                  Value: !Sub '${AWS::StackName}-tg'
+                  Value: !Sub '${NombreProyecto}${NN}-tg'
 
     MyListener:
         Type: AWS::ElasticLoadBalancingV2::Listener
@@ -512,35 +508,71 @@ Resources:
             Port: 80
             Protocol: HTTP
 
+    # Route53. Creación de zona privada y sus registros para el proyecto
+    PrivateHostedZone:
+        Type: AWS::Route53::HostedZone
+        Properties:
+            Name: !Sub '${NombreProyecto}${NN}.es'
+            VPCs:
+                - VPCId: !Ref VPC
+                  VPCRegion: !Ref 'AWS::Region'
+            HostedZoneConfig:
+                Comment: !Sub 'Zona privada para el proyecto ${NombreProyecto}${NN}'
+    #        Tags:
+    #            - Key: Name
+    #              Value: !Sub '${NombreProyecto}${NN}-private-hosted-zone'
+
+    MyRecordSetALB:
+        Type: AWS::Route53::RecordSet
+        Properties:
+            HostedZoneId: !Ref PrivateHostedZone
+            Name: !Sub 'www.${NombreProyecto}${NN}.es'
+            Type: CNAME
+            TTL: '60'
+            ResourceRecords:
+                - !GetAtt MyLoadBalancer.DNSName
+
+    MyRecordSetRDS:
+        Type: AWS::Route53::RecordSet
+        Properties:
+            HostedZoneId: !Ref PrivateHostedZone
+            Name: !Sub 'rds.${NombreProyecto}${NN}.es'
+            Type: A
+            TTL: '60'
+            ResourceRecords:
+                - !GetAtt UbuntuBastion.PublicIp
+            #Puede tener mas de una direccion IPv6. Selecciono la primera
 Outputs:
     Proyecto:
         Description: Nombre del proyecto
         Value: !Sub '${NombreProyecto}${NN}'
         Export:
-            Name:  "Proyecto"
-    UbuntuInstanceBastion:
-        Description: Ubuntu Instance Public IP
+            Name:  'Proyecto'
+    UbuntuBastionIPv4Publica:
+        Description: Ubuntu Bastion IPv4 publica
         Value: !GetAtt UbuntuBastion.PublicIp
+    #UbuntuBastionIPv4Publica:
+    #    Description: Ubuntu Bastion IPv6 publica
+    #    Value: !Select [0, !GetAtt UbuntuBastion.Ipv6Addresses]
     VPCId:
-        Description: "VPC ID"
+        Description: 'VPC ID'
         Value: !Ref VPC
         Export:
-            Name: "MiVPCID"  # Exporta el ID de la VPC. Utilizo el export para poder importar el ID de la VPC en otro stack
+            Name: 'MiVPCID'  # Exporta el ID de la VPC. Utilizo el export para poder importar el ID de la VPC en otro stack
                              # En la plantilla destino utilizar --->   VpcId: !ImportValue MiVPCID
     SubredPublica1Id:
-        Description: "Subred Publica 1 ID"
+        Description: 'Subred Publica 1 ID'
         Value: !Ref SubredPublica1
-
     SubredPublica2Id:
-        Description: "Subred Publica 2 ID"
+        Description: 'Subred Publica 2 ID'
         Value: !Ref SubredPublica2
     SubredPrivada1Id:
-        Description: "Subred Privada 1 ID"
+        Description: 'Subred Privada 1 ID'
         Value: !Ref SubredPrivada1
         Export:
-            Name: "MiPrivateSubnet1ID"  # Exporta el ID de la Subnet 1
+            Name: 'MiPrivateSubnet1ID'  # Exporta el ID de la Subnet 1
     SubredPrivada2Id:
-        Description: "Subred Privada 2 ID"
+        Description: 'Subred Privada 2 ID'
         Value: !Ref SubredPrivada2
         Export:
-            Name: "MiSubredPrivada2ID"  # Exporta el ID de la Subnet 2
+            Name: 'MiSubredPrivada2ID'  # Exporta el ID de la Subnet 2
