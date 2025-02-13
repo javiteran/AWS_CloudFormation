@@ -457,6 +457,7 @@ Resources:
                 VolumeType: gp3  # Tipo de volumen
                 DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
 
+    # Balanceador de carga
     MyLoadBalancer:
         Type: AWS::ElasticLoadBalancingV2::LoadBalancer
         Properties:
@@ -473,6 +474,7 @@ Resources:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-alb'
 
+    # Target Group. Grupo de destinos
     MyTargetGroup:
         Type: AWS::ElasticLoadBalancingV2::TargetGroup
         Properties:
@@ -498,6 +500,7 @@ Resources:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-tg'
 
+    # Listener. Escucha en el puerto 80 y redirige al target group
     MyListener:
         Type: AWS::ElasticLoadBalancingV2::Listener
         Properties:
@@ -517,10 +520,7 @@ Resources:
                 - VPCId: !Ref VPC
                   VPCRegion: !Ref 'AWS::Region'
             HostedZoneConfig:
-                Comment: !Sub 'Zona privada para el proyecto ${NombreProyecto}${NN}'
-    #        Tags:
-    #            - Key: Name
-    #              Value: !Sub '${NombreProyecto}${NN}-private-hosted-zone'
+                Comment: !Sub 'Zona privada ${NombreProyecto}${NN}'
 
     MyRecordSetALB:
         Type: AWS::Route53::RecordSet
