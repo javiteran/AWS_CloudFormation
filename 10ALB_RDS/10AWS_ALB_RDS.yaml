@@ -197,7 +197,7 @@ Resources:
 
     # Rutas por defecto para las tabla de rutas privadas. Para IPv6 de solo salida.
     # Las instancias en subredes privadas pueden salir a internet pero no se puede acceder a ellas desde internet.
-    DefaultRouteIPv6SoloSalida1:
+    DefaultRouteIPv6SoloSalida0:
         Type: AWS::EC2::Route
         DependsOn: MiEgressOnlyInternetGateway
         Properties:
@@ -205,7 +205,7 @@ Resources:
             DestinationIpv6CidrBlock: ::/0
             EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
 
-    DefaultRouteIPv6SoloSalida2:
+    DefaultRouteIPv6SoloSalida1:
         Type: AWS::EC2::Route
         DependsOn: MiEgressOnlyInternetGateway
         Properties:
@@ -213,7 +213,7 @@ Resources:
             DestinationIpv6CidrBlock: ::/0
             EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
 
-    DefaultRouteIPv6SoloSalida3:
+    DefaultRouteIPv6SoloSalida2:
         Type: AWS::EC2::Route
         DependsOn: MiEgressOnlyInternetGateway
         Properties:
@@ -222,32 +222,38 @@ Resources:
             EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
 
     # Asociacion de subredes publicas con tabla de rutas
-    SubnetRouteTableAssociation1:
+    SubnetRouteTableAssociation0:
         Type: AWS::EC2::SubnetRouteTableAssociation
         Properties:
             SubnetId: !Ref SubredPublica1
             RouteTableId: !Ref TablaRutasPublica
 
-    SubnetRouteTableAssociation2:
+    SubnetRouteTableAssociation1:
         Type: AWS::EC2::SubnetRouteTableAssociation
         Properties:
             SubnetId: !Ref SubredPublica2
             RouteTableId: !Ref TablaRutasPublica
 
+    SubnetRouteTableAssociation2:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPublica3
+            RouteTableId: !Ref TablaRutasPublica
+
     # Asociacion de subredes privadas con sus tablas de rutas
-    SubnetRouteTableAssociation3:
+    SubnetRouteTableAssociation6:
         Type: AWS::EC2::SubnetRouteTableAssociation
         Properties:
             SubnetId: !Ref SubredPrivada1
             RouteTableId: !Ref TablaRutasPrivada1
 
-    SubnetRouteTableAssociation4:
+    SubnetRouteTableAssociation7:
         Type: AWS::EC2::SubnetRouteTableAssociation
         Properties:
             SubnetId: !Ref SubredPrivada2
             RouteTableId: !Ref TablaRutasPrivada2
 
-    SubnetRouteTableAssociation5:
+    SubnetRouteTableAssociation8:
         Type: AWS::EC2::SubnetRouteTableAssociation
         Properties:
             SubnetId: !Ref SubredPrivada3
@@ -393,6 +399,8 @@ Resources:
               apt-get update -y
               apt-get upgrade -y
               apt-get install apache2 -y
+              # Crear archivo index.html
+              echo "<html><head><title>U1</title></head><body><h1>Ubuntu Destino 1</h1></body></html>" > /var/www/html/index.html
           Tags:
             - Key: Name
               Value: !Sub '${NombreProyecto}${NN}-us1'
@@ -420,6 +428,8 @@ Resources:
               apt-get update -y
               apt-get upgrade -y
               apt-get install apache2 -y
+              # Crear archivo index.html
+              echo "<html><head><title>U2</title></head><body><h1>Ubuntu Destino 2</h1></body></html>" > /var/www/html/index.html
           Tags:
             - Key: Name
               Value: !Sub '${NombreProyecto}${NN}-us2'
@@ -447,6 +457,8 @@ Resources:
               apt-get update -y
               apt-get upgrade -y
               apt-get install apache2 -y
+              # Crear archivo index.html
+              echo "<html><head><title>U3</title></head><body><h1>Ubuntu Destino 3</h1></body></html>" > /var/www/html/index.html
           Tags:
             - Key: Name
               Value: !Sub '${NombreProyecto}${NN}-us3'
@@ -464,6 +476,7 @@ Resources:
             #Name: !Sub '${AWS::StackName}-alb'
             Name: !Sub '${NombreProyecto}${NN}-alb'
             Scheme: internet-facing
+            IpAddressType: dualstack # Soporta IPv4 e IPv6
             Subnets:
                 - !Ref SubredPublica1
                 - !Ref SubredPublica2
@@ -541,7 +554,6 @@ Resources:
             TTL: '60'
             ResourceRecords:
                 - !GetAtt UbuntuBastion.PublicIp
-            #Puede tener mas de una direccion IPv6. Selecciono la primera
 Outputs:
     Proyecto:
         Description: Nombre del proyecto
