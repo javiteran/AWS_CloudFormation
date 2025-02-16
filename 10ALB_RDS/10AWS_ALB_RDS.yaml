@@ -481,6 +481,7 @@ Resources:
                 - !Ref SubredPublica1
                 - !Ref SubredPublica2
                 - !Ref SubredPublica3
+            IpAddressType: "dualstack"  # Esto permite IPv4 e IPv6                
             SecurityGroups:
                 - !Ref BalanceadorSecurityGroup
             Tags:
@@ -497,6 +498,7 @@ Resources:
             Port: 80
             Protocol: HTTP
             TargetType: instance
+            #IpAddressType: "ipv6"
             HealthCheckIntervalSeconds: 30
             HealthCheckPath: /index.html
             HealthCheckProtocol: HTTP
