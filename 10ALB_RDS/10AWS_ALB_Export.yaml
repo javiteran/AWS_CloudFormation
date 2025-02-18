@@ -8,7 +8,6 @@ Description: >
     Utilizado CloudFormation para AWS Academy Learning Lab
     Autor: Javier Teran Gonzalez
     Fecha creacion:     12/02/2025
-
     Version: 1.01
         Modificaciones: 12/02/2025. Inicio
 Parameters:
@@ -481,7 +480,6 @@ Resources:
                 - !Ref SubredPublica1
                 - !Ref SubredPublica2
                 - !Ref SubredPublica3
-            IpAddressType: "dualstack"  # Esto permite IPv4 e IPv6                
             SecurityGroups:
                 - !Ref BalanceadorSecurityGroup
             Tags:
@@ -510,7 +508,7 @@ Resources:
             Targets:
                 - Id: !Ref UbuntuDestino1
                 - Id: !Ref UbuntuDestino2
-                - Id: !Ref UbuntuDestino3                
+                - Id: !Ref UbuntuDestino3
             Tags:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-tg'
@@ -547,11 +545,11 @@ Resources:
             ResourceRecords:
                 - !GetAtt MyLoadBalancer.DNSName
 
-    MyRecordSetRDS:
+    MyRecordSetBastion:
         Type: AWS::Route53::RecordSet
         Properties:
             HostedZoneId: !Ref PrivateHostedZone
-            Name: !Sub 'rds.${NombreProyecto}${NN}.es'
+            Name: !Sub 'bastion.${NombreProyecto}${NN}.es'
             Type: A
             TTL: '60'
             ResourceRecords:
@@ -561,7 +559,7 @@ Outputs:
         Description: Nombre del proyecto
         Value: !Sub '${NombreProyecto}${NN}'
         Export:
-            Name:  'Proyecto'
+            Name:  Proyecto
     UbuntuBastionIPv4Publica:
         Description: Ubuntu Bastion IPv4 publica
         Value: !GetAtt UbuntuBastion.PublicIp
@@ -572,7 +570,7 @@ Outputs:
         Description: 'VPC ID'
         Value: !Ref VPC
         Export:
-            Name: 'MiVPCID'  # Exporta el ID de la VPC. Utilizo el export para poder importar el ID de la VPC en otro stack
+            Name: MiVPCID  # Exporta el ID de la VPC. Utilizo el export para poder importar el ID de la VPC en otro stack
                              # En la plantilla destino utilizar --->   VpcId: !ImportValue MiVPCID
     SubredPublica1Id:
         Description: 'Subred Publica 1 ID'
@@ -584,9 +582,29 @@ Outputs:
         Description: 'Subred Privada 1 ID'
         Value: !Ref SubredPrivada1
         Export:
-            Name: 'MiPrivateSubnet1ID'  # Exporta el ID de la Subnet 1
+            Name: MiSubredPrivada1ID  # Exporta el ID de la Subnet 1
     SubredPrivada2Id:
         Description: 'Subred Privada 2 ID'
         Value: !Ref SubredPrivada2
         Export:
-            Name: 'MiSubredPrivada2ID'  # Exporta el ID de la Subnet 2
+            Name: MiSubredPrivada2ID  # Exporta el ID de la Subnet 2
+    SubredPrivada3Id:
+        Description: 'Subred Privada 3 ID'
+        Value: !Ref SubredPrivada3
+        Export:
+            Name: MiSubredPrivada3ID  # Exporta el ID de la Subnet 1
+    UbuntuDestinosSecurityGroupId:
+        Description: Grupo de seguridad Ubuntu Destinos ID
+        Value: !Ref UbuntuDestinosSecurityGroup
+        Export:
+            Name: MisDestinosSGID  # Exporta el ID del grupo de seguridad de los destinos para darle acceso a la base de datos
+    UbuntuBastionSecurityGroupId:
+        Description: Grupo de seguridad Ubuntu Bastion ID
+        Value: !Ref UbuntuBastionSecurityGroup
+        Export:
+            Name: MiBastionSGID  # Exporta el ID del grupo de seguridad de los destinos para darle acceso a la base de datos
+    ZonaDNSPrivada:
+        Description: Zona DNS privada
+        Value: !Ref PrivateHostedZone
+        Export:
+            Name: MiZonaDNSPrivada  # Exporta el ID de la zona DNS privada

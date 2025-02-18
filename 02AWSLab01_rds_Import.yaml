@@ -36,7 +36,7 @@ Resources:
       Properties:
         DBSubnetGroupDescription: "Grupo de subredes para la base de datos MySQL"
         SubnetIds: 
-          - !ImportValue MiPrivateSubnet1ID    # Sustituir con tus Subnets de tu VPC
+          - !ImportValue MiPrivateSubnet1ID   # Sustituir con tus Subnets de tu VPC
           - !ImportValue MiPrivateSubnet2ID   # Sustituir con tus Subnets de tu VPC
 
 
