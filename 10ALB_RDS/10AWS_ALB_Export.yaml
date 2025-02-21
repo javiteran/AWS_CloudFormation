@@ -10,8 +10,11 @@ Description: >
     Utilizado CloudFormation para AWS Academy Learning Lab
     Autor: Javier Teran Gonzalez
     Fecha creacion:     12/02/2025
-    Version: 1.01
-        Modificaciones: 12/02/2025. Inicio
+    Version: 1.20
+        Modificaciones: 21/02/2025. Inicio
+            - Se incluye un parametro para la creacion de un certificado en ACM para el balanceador de carga. Exige un registro DNS publico y una acción manual
+            - Ejemplo basura para usar con BBDD RDS. Obtenido de un repositorio de GitHub
+
 Parameters:
     NombreProyecto:
         Description: Nombre del proyecto.
@@ -414,13 +417,30 @@ Resources:
           SubnetId: !Ref SubredPrivada1
           UserData:
             Fn::Base64: !Sub |
-              #!/bin/bash
-              echo 'User data para Ubuntu Server'
-              apt-get update -y
-              apt-get upgrade -y
-              apt-get install apache2 -y
-              # Crear archivo index.html
-              echo "<html><head><title>U1</title></head><body><h1>Ubuntu Destino 1</h1></body></html>" > /var/www/html/index.html
+                #!/bin/bash
+                apt -y update
+                apt -y upgrade
+                apt install -y apache2 php php-mysql mysql-client
+                cd /var/www/html/
+                rm index.html
+                git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
+                cp vars-sample.php vars.php
+                service apache2 restart
+
+                #Modificar el fichero de configuración de la BBDD
+                #para que funcione la aplicación                                                                       
+                BBDDUsuario="admin"
+                BBDDPassword="admin1234"
+                BBDDServidor="rds.${NombreProyecto}${NN}.es"
+                BBDD="MiBaseDatos"
+                NumServidor=$RANDOM
+
+                # Cambiar el fichero de constantes por los datos correctos
+                sed -i "s/localhost/$BBDDServidor/g"    /var/www/html/vars.php
+                sed -i "s/user/$BBDDUsuario/g"     	    /var/www/html/vars.php
+                sed -i "s/usuariopass/$BBDDPassword/g"  /var/www/html/vars.php
+                sed -i "s/libros/$BBDD/g"               /var/www/html/vars.php
+                sed -i "s/1Uno/$NumServidor/g"          /var/www/html/vars.php
           Tags:
             - Key: Name
               Value: !Sub '${NombreProyecto}${NN}-us1'
@@ -443,13 +463,30 @@ Resources:
           SubnetId: !Ref SubredPrivada2
           UserData:
             Fn::Base64: !Sub |
-              #!/bin/bash
-              echo 'User data para Ubuntu Server'
-              apt-get update -y
-              apt-get upgrade -y
-              apt-get install apache2 -y
-              # Crear archivo index.html
-              echo "<html><head><title>U2</title></head><body><h1>Ubuntu Destino 2</h1></body></html>" > /var/www/html/index.html
+                #!/bin/bash
+                apt -y update
+                apt -y upgrade
+                apt install -y apache2 php php-mysql mysql-client
+                cd /var/www/html/
+                rm index.html
+                git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
+                cp vars-sample.php vars.php
+                service apache2 restart
+
+                #Modificar el fichero de configuración de la BBDD
+                #para que funcione la aplicación                                                                       
+                BBDDUsuario="admin"
+                BBDDPassword="admin1234"
+                BBDDServidor="rds.${NombreProyecto}${NN}.es"
+                BBDD="MiBaseDatos"
+                NumServidor=$RANDOM
+
+                # Cambiar el fichero de constantes por los datos correctos
+                sed -i "s/localhost/$BBDDServidor/g"    /var/www/html/vars.php
+                sed -i "s/user/$BBDDUsuario/g"     	    /var/www/html/vars.php
+                sed -i "s/usuariopass/$BBDDPassword/g"  /var/www/html/vars.php
+                sed -i "s/libros/$BBDD/g"               /var/www/html/vars.php
+                sed -i "s/1Uno/$NumServidor/g"          /var/www/html/vars.php
           Tags:
             - Key: Name
               Value: !Sub '${NombreProyecto}${NN}-us2'
@@ -472,13 +509,30 @@ Resources:
           SubnetId: !Ref SubredPrivada3
           UserData:
             Fn::Base64: !Sub |
-              #!/bin/bash
-              echo 'User data para Ubuntu Server'
-              apt-get update -y
-              apt-get upgrade -y
-              apt-get install apache2 -y
-              # Crear archivo index.html
-              echo "<html><head><title>U3</title></head><body><h1>Ubuntu Destino 3</h1></body></html>" > /var/www/html/index.html
+                #!/bin/bash
+                apt -y update
+                apt -y upgrade
+                apt install -y apache2 php php-mysql mysql-client
+                cd /var/www/html/
+                rm index.html
+                git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
+                cp vars-sample.php vars.php
+                service apache2 restart
+
+                #Modificar el fichero de configuración de la BBDD
+                #para que funcione la aplicación                                                                       
+                BBDDUsuario="admin"
+                BBDDPassword="admin1234"
+                BBDDServidor="rds.${NombreProyecto}${NN}.es"
+                BBDD="MiBaseDatos"
+                NumServidor=$RANDOM
+
+                # Cambiar el fichero de constantes por los datos correctos
+                sed -i "s/localhost/$BBDDServidor/g"    /var/www/html/vars.php
+                sed -i "s/user/$BBDDUsuario/g"     	    /var/www/html/vars.php
+                sed -i "s/usuariopass/$BBDDPassword/g"  /var/www/html/vars.php
+                sed -i "s/libros/$BBDD/g"               /var/www/html/vars.php
+                sed -i "s/1Uno/$NumServidor/g"          /var/www/html/vars.php
           Tags:
             - Key: Name
               Value: !Sub '${NombreProyecto}${NN}-us3'
@@ -519,7 +573,7 @@ Resources:
             TargetType: instance
             #IpAddressType: "ipv6"
             HealthCheckIntervalSeconds: 30
-            HealthCheckPath: /index.html
+            HealthCheckPath: /verestado.html
             HealthCheckProtocol: HTTP
             HealthCheckTimeoutSeconds: 5
             HealthyThresholdCount: 5
