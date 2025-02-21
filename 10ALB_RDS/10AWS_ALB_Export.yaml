@@ -5,6 +5,8 @@ Description: >
     Ademas creara :
         - 2 instancias EC2 Ubuntu Server 24.04 en subredes privadas
         - 1 instancia EC2 Ubuntu Server 24.04 bastión con IPv4 elastica
+        - 1 balanceador de carga con 3 destinos en subredes privadas
+        - 1 zona DNS privada con registros para el balanceador y el bastion
     Utilizado CloudFormation para AWS Academy Learning Lab
     Autor: Javier Teran Gonzalez
     Fecha creacion:     12/02/2025
@@ -12,20 +14,39 @@ Description: >
         Modificaciones: 12/02/2025. Inicio
 Parameters:
     NombreProyecto:
-        Description: 'Nombre del proyecto'
+        Description: Nombre del proyecto.
         Type: String
         Default: 'Balance24'         
     NN:
         Type: Number
-        Description: Numero de alumno
+        Description: Numero de alumno.
         Default: 15
         ConstraintDescription: 'Debe estar en el rango del [1-50]'
         MinValue: 1
         MaxValue: 50
     AMIUbuntu:
-        Description: 'AMI ID Ubuntu Server 24.04'
+        Description: AMI ID Ubuntu Server 24.04.
         Type: String
         Default: 'ami-04b4f1a9cf54c11d0'    
+    AgenteEscuchaHttps:
+        Description: |
+            El agente de escucha del balanceador debe hacerlo por https?. 
+            Si respondes que si tendras que validad manualmente en tu DNS publico la peticion del certificado creado en el servicio AWS Certificate Manager (ACM).
+        Type: String
+        Default: 'No Https'
+        AllowedValues:
+            - 'Si Https'
+            - 'No Https'
+    FQDNBalanceador:
+        Description: | 
+            Registro DNS para el balanceador de carga en tu DNS publico. Ejemplo: alb.alisal01.com.es.
+            Necesario si has respondido si en AgenteEscuchaHttps. 
+            Tendras que crear un registro CNAME manual en tu DNS apuntando al DNS del balanceador.
+        Type: String
+        Default: 'alb.alisal01.com.es'    
+
+Conditions:
+    UsarHttps: !Equals [ !Ref AgenteEscuchaHttps, Si Https ]
 
 #Recursos del proyecto        
 Resources:
@@ -514,7 +535,7 @@ Resources:
                   Value: !Sub '${NombreProyecto}${NN}-tg'
 
     # Listener. Escucha en el puerto 80 y redirige al target group
-    MyListener:
+    MyListenerHttp:
         Type: AWS::ElasticLoadBalancingV2::Listener
         Properties:
             DefaultActions:
@@ -522,7 +543,7 @@ Resources:
                   TargetGroupArn: !Ref MyTargetGroup
             LoadBalancerArn: !Ref MyLoadBalancer
             Port: 80
-            Protocol: HTTP
+            Protocol: HTTP            
 
     # Route53. Creación de zona privada y sus registros para el proyecto
     PrivateHostedZone:
@@ -554,6 +575,36 @@ Resources:
             TTL: '60'
             ResourceRecords:
                 - !GetAtt UbuntuBastion.PublicIp
+
+# Certificado con ACM para el balanceador de carga https
+    MiCertificado:
+        Type: AWS::CertificateManager::Certificate
+        Condition: UsarHttps
+        Properties:
+            DomainName: !Ref FQDNBalanceador
+            ValidationMethod: DNS
+            #Esto solo vale si tengo la zona DNS en Route53 y es pública
+            #DomainValidationOptions:
+            #    - DomainName: !Sub '${NombreProyecto}${NN}.es'
+            #      HostedZoneId: !Ref PublicHostedZone
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-cert'
+
+    # Listener. Escucha en el puerto 443 y redirige al target group
+    MyListenerHttps:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Condition: UsarHttps
+        Properties:
+            DefaultActions:
+                - Type: forward
+                  TargetGroupArn: !Ref MyTargetGroup
+            LoadBalancerArn: !Ref MyLoadBalancer
+            Port: 443
+            Protocol: HTTPS
+            Certificates:
+                - CertificateArn: !Ref MiCertificado
+
 Outputs:
     Proyecto:
         Description: Nombre del proyecto
