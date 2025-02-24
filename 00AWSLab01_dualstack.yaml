@@ -129,7 +129,6 @@ Resources:
             VpcId: !Ref VPC
             CidrBlock: !Sub '10.24.1${NN}.0/25'
             Ipv6CidrBlock:  !Select [1, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
-            #Ipv6CidrBlock: !GetAtt 'VPC.Ipv6CidrBlocks.0'
             AssignIpv6AddressOnCreation: true
             AvailabilityZone: !Select [ 0, !GetAZs '' ]
             Tags:
