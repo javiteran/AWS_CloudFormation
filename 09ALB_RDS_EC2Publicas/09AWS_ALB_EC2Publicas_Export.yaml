@@ -18,7 +18,7 @@ Parameters:
     NombreProyecto:
         Description: Nombre del proyecto.
         Type: String
-        Default: 'ALBPub25'         
+        Default: 'albp25'         
     NN:
         Type: Number
         Description: Numero de alumno.
@@ -27,7 +27,7 @@ Parameters:
         MinValue: 1
         MaxValue: 50
     AMIUbuntu:
-        Description: AMI ID Ubuntu Server 25.04.
+        Description: AMI ID Ubuntu Server 24.04.
         Type: String
         Default: 'ami-04b4f1a9cf54c11d0'    
     AgenteEscuchaHttps:
@@ -290,13 +290,15 @@ Resources:
                 FromPort: 22
                 ToPort: 22
                 #CidrIp: 0.0.0.0/0
-                SourceSecurityGroupId: !Ref UbuntuBastionSecurityGroup
+                #SourceSecurityGroupId: !Ref UbuntuBastionSecurityGroup
+                CidrIp:  !Select [6, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
                 Description: Permitir SSH IPv4
               - IpProtocol: tcp
                 FromPort: 22
                 ToPort: 22
-                SourceSecurityGroupId: !Ref UbuntuBastionSecurityGroup
-                #CidrIpv6: ::/0
+                #SourceSecurityGroupId: !Ref UbuntuBastionSecurityGroup
+                #idrIpv6: ::/0
+                CidrIpv6: !Select [0, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
                 Description: Permitir SSH IPv6
               - IpProtocol: tcp
                 FromPort: 80
@@ -311,28 +313,28 @@ Resources:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-usalb-sg'
 
-    # Grupo de seguridad Ubuntu. Puertos DNS, HTTP, HTTPS y SSH
-    UbuntuBastionSecurityGroup:
-        Type: AWS::EC2::SecurityGroup
-        Properties:
-            GroupName: !Sub '${NombreProyecto}${NN}-usbastion-sg'
-            GroupDescription: !Sub '${NombreProyecto}${NN}-usbastion-sg'
-            VpcId: !Ref VPC
-            SecurityGroupIngress:           
-              - IpProtocol: tcp
-                FromPort: 22
-                ToPort: 22
-                CidrIp: 0.0.0.0/0
-                Description: Permitir SSH IPv4            
-              - IpProtocol: tcp
-                FromPort: 22
-                ToPort: 22
-                CidrIpv6: ::/0
-                Description: Permitir SSH IPv6
-            Tags:
-                - Key: Name
-                  Value: !Sub '${NombreProyecto}${NN}-usbastion-sg'
-
+#    # Grupo de seguridad Ubuntu. Puertos DNS, HTTP, HTTPS y SSH
+#    UbuntuBastionSecurityGroup:
+#        Type: AWS::EC2::SecurityGroup
+#        Properties:
+#            GroupName: !Sub '${NombreProyecto}${NN}-usbastion-sg'
+#            GroupDescription: !Sub '${NombreProyecto}${NN}-usbastion-sg'
+#            VpcId: !Ref VPC
+#            SecurityGroupIngress:           
+#              - IpProtocol: tcp
+#                FromPort: 22
+#                ToPort: 22
+#                CidrIp: 0.0.0.0/0
+#                Description: Permitir SSH IPv4            
+#              - IpProtocol: tcp
+#                FromPort: 22
+#                ToPort: 22
+#                CidrIpv6: ::/0
+#                Description: Permitir SSH IPv6
+#            Tags:
+#                - Key: Name
+#                  Value: !Sub '${NombreProyecto}${NN}-usbastion-sg'
+#
     BalanceadorSecurityGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
@@ -364,40 +366,40 @@ Resources:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-alb-sg'
 
-    # Creacion de instancia Ubuntu
-    UbuntuBastion:
-        Type: AWS::EC2::Instance
-        Properties:
-          ImageId: !Ref AMIUbuntu
-          InstanceType: t2.micro
-          KeyName: vockey
-          Monitoring: false
-          SecurityGroupIds:
-              - !Ref UbuntuBastionSecurityGroup
-          SubnetId: !Ref SubredPublica1
-          UserData:
-            Fn::Base64: !Sub |
-              #!/bin/bash
-              echo 'User data para Ubuntu Server'
-              apt-get update -y
-              apt-get upgrade -y
-          Tags:
-            - Key: Name
-              Value: !Sub '${NombreProyecto}${NN}-us-bastion'
-          BlockDeviceMappings:
-            - DeviceName: /dev/sda1  # El volumen raíz de la instancia
-              Ebs:
-                VolumeSize: 20  # Tamaño del volumen en GB
-                VolumeType: gp3  # Tipo de volumen
-                DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
-    UbuntuElasticIp:
-        Type: AWS::EC2::EIP
-        Properties:
-            InstanceId: !Ref UbuntuBastion
-            Tags:
-                - Key: Name
-                  Value: !Sub '${NombreProyecto}${NN}-us-ip'
-
+#    # Creacion de instancia Ubuntu
+#    UbuntuBastion:
+#        Type: AWS::EC2::Instance
+#        Properties:
+#          ImageId: !Ref AMIUbuntu
+#          InstanceType: t2.micro
+#          KeyName: vockey
+#          Monitoring: false
+#          SecurityGroupIds:
+#              - !Ref UbuntuBastionSecurityGroup
+#          SubnetId: !Ref SubredPublica1
+#          UserData:
+#            Fn::Base64: !Sub |
+#              #!/bin/bash
+#              echo 'User data para Ubuntu Server'
+#              apt-get update -y
+#              apt-get upgrade -y
+#          Tags:
+#            - Key: Name
+#              Value: !Sub '${NombreProyecto}${NN}-us-bastion'
+#          BlockDeviceMappings:
+#            - DeviceName: /dev/sda1  # El volumen raíz de la instancia
+#              Ebs:
+#                VolumeSize: 20  # Tamaño del volumen en GB
+#                VolumeType: gp3  # Tipo de volumen
+#                DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
+#    UbuntuElasticIp:
+#        Type: AWS::EC2::EIP
+#        Properties:
+#            InstanceId: !Ref UbuntuBastion
+#            Tags:
+#                - Key: Name
+#                  Value: !Sub '${NombreProyecto}${NN}-us-ip'
+#
 # Instancias en subredes privadas para los destinos del balanceador
     UbuntuDestino1:
         Type: AWS::EC2::Instance
@@ -620,15 +622,15 @@ Resources:
             ResourceRecords:
                 - !GetAtt MiALB.DNSName
 
-    MiRecordSetBastion:
-        Type: AWS::Route53::RecordSet
-        Properties:
-            HostedZoneId: !Ref MiZonaPrivadaHosteada
-            Name: !Sub 'bastion.${NombreProyecto}${NN}.es'
-            Type: A
-            TTL: '60'
-            ResourceRecords:
-                - !GetAtt UbuntuBastion.PublicIp
+#    MiRecordSetBastion:
+#        Type: AWS::Route53::RecordSet
+#        Properties:
+#            HostedZoneId: !Ref MiZonaPrivadaHosteada
+#            Name: !Sub 'bastion.${NombreProyecto}${NN}.es'
+#            Type: A
+#            TTL: '60'
+#            ResourceRecords:
+#                - !GetAtt UbuntuBastion.PublicIp
 
 # Certificado con ACM para el balanceador de carga https
     MiCertificado:
@@ -665,9 +667,9 @@ Outputs:
         Value: !Sub '${NombreProyecto}${NN}'
         Export:
             Name:  Proyecto
-    UbuntuBastionIPv4Publica:
-        Description: Ubuntu Bastion IPv4 publica
-        Value: !GetAtt UbuntuBastion.PublicIp
+    #UbuntuBastionIPv4Publica:
+    #    Description: Ubuntu Bastion IPv4 publica
+    #    Value: !GetAtt UbuntuBastion.PublicIp
     #UbuntuBastionIPv4Publica:
     #    Description: Ubuntu Bastion IPv6 publica
     #    Value: !Select [0, !GetAtt UbuntuBastion.Ipv6Addresses]
@@ -675,14 +677,13 @@ Outputs:
         Description: 'VPC ID'
         Value: !Ref VPC
         Export:
-            Name: MiVPCID  # Exporta el ID de la VPC. Utilizo el export para poder importar el ID de la VPC en otro stack
-                             # En la plantilla destino utilizar --->   VpcId: !ImportValue MiVPCID
+            Name: MiVPCID   # Exporta el ID de la VPC. Utilizo el export para poder importar el ID de la VPC en otro stack
+                            # En la plantilla destino utilizar --->   VpcId: !ImportValue MiVPCID
     SubredPublica1Id:
         Description: 'Subred Publica 1 ID'
         Value: !Ref SubredPublica1
-    SubredPublica2Id:
-        Description: 'Subred Publica 2 ID'
-        Value: !Ref SubredPublica2
+        Export:
+            Name: MiSubredPublica1ID  # Exporta el ID de la Subnet 1
     SubredPrivada1Id:
         Description: 'Subred Privada 1 ID'
         Value: !Ref SubredPrivada1
@@ -703,11 +704,11 @@ Outputs:
         Value: !Ref UbuntuDestinosSecurityGroup
         Export:
             Name: MisDestinosSGID  # Exporta el ID del grupo de seguridad de los destinos para darle acceso a la base de datos
-    UbuntuBastionSecurityGroupId:
-        Description: Grupo de seguridad Ubuntu Bastion ID
-        Value: !Ref UbuntuBastionSecurityGroup
-        Export:
-            Name: MiBastionSGID  # Exporta el ID del grupo de seguridad de los destinos para darle acceso a la base de datos
+#    UbuntuBastionSecurityGroupId:
+#        Description: Grupo de seguridad Ubuntu Bastion ID
+#        Value: !Ref UbuntuBastionSecurityGroup
+#        Export:
+#            Name: MiBastionSGID  # Exporta el ID del grupo de seguridad de los destinos para darle acceso a la base de datos
     ZonaDNSPrivada:
         Description: Zona DNS privada
         Value: !Ref MiZonaPrivadaHosteada
