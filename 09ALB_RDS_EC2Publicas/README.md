@@ -119,14 +119,14 @@ Para validar la plantilla, utiliza el siguiente comando:
 aws cloudformation validate-template --template-body file://09AWS_RDS_EC2Publicas_Import.yaml
 ```
 
-## Autor
+## Creación del entorno de tareas
 
-Javier Teran Gonzalez
+Con este fichero se creará el siguiente entorno de tareas:
 
-## Fecha de Creación
+![AWSAcademy_IaC_AWSCloudFormation_09ALB_RDS_EC2Publicas.PNG](../imagenes/AWSAcademy_IaC_AWSCloudFormation_09ALB_RDS_EC2Publicas.PNG)
 
-18/02/2025
+## :blue_book:Diagramas de microsoft Visio
 
-## Versión
+En la carpeta MicrosoftVisio se pueden encontrar los diagramas de Microsoft Visio de la plantilla de CloudFormation.
 
-1.20
+[AWSAcademy_IaC_AWSCloudFormation.vsdx](../MicrosoftVisio/)
