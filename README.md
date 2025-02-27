@@ -84,11 +84,17 @@ aws cloudformation describe-stacks --stack-name Lab03
 aws cloudformation validate-template --template-body file://00AWSLab01_dualstack.yaml
 ```
 
-## :dizzy: AWS Academy CloudFormation. Otros ejemplos
+## :blue_book:Diagramas de microsoft Visio
+
+En la carpeta MicrosoftVisio se pueden encontrar los diagramas de Microsoft Visio de la plantilla de CloudFormation.
+
+[000AWSCrearVPC_EC2Win_Ubu.vsdx](MicrosoftVisio/)
+
+## :chart: AWS Academy CloudFormation. Otros ejemplos
 
 En las carpetas de este repositorio se pueden encontrar otros ejemplos de plantillas de AWS CloudFormation para crear entornos de aprendizaje en AWS Academy.
 
-### 00IntroduccionVPC. (Carpeta 00IntroduccionVPC)
+### :zero: - 00IntroduccionVPC. (Carpeta 00IntroduccionVPC)
 
 Acceso al README.md de la carpeta: [README.md](00IntroduccionVPC/README.md)
   
@@ -96,7 +102,7 @@ Acceso al README.md de la carpeta: [README.md](00IntroduccionVPC/README.md)
 * `00AWS_VPC_EIGW.yaml`: [Crear VPC con IPv4 e IPv6 y una EIGW de IPv6 de sólo salida](00IntroduccionVPC/00AWS_VPC_EIGW.yaml)
 * `FuncionCIDR_GetAtt_Join.yaml`: [Plantilla básica de uso de las funciones !CIDR, !GetAtt, !JOIN, !Ref, !Sub, Export](00IntroduccionVPC/FuncionCIDR_GetAtt_Join.yaml)
 
-### Balanceador, RDS e instancias EC2 en subredes públicas + EC2 bastión. (Carpeta 09ALB_RDS_EC2Publicas)
+### :nine: - Balanceador, RDS e instancias EC2 en subredes públicas + EC2 bastión. (Carpeta 09ALB_RDS_EC2Publicas)
 
 Acceso al README.md de la carpeta: [README.md](09ALB_RDS_EC2Publicas/README.md)
   
@@ -105,13 +111,13 @@ Además se crean variables EXPORT a utilizar en la plantilla siguiente  [ALB, Ta
 
 * `09AWS_ALB_EC2Publicas_Import.yaml`: Crea un RDS, crea registros en la zona privada en Route53 y una instancia EC2 bastión cuyo user data crea el diseño de la base de datos  [RDS, Route53, EC2 ubuntu bastión y carga sql inicial](09AWS_RDS_EC2Publicas_Import.yaml)
 
-### Balanceador, RDS e instancias EC2 en subredes privadas + EC2 bastión. (Carpeta 09ALB_RDS_EC2Privadas)
+### :keycap_ten: - Balanceador, RDS e instancias EC2 en subredes privadas + EC2 bastión. (Carpeta 10ALB_RDS_EC2Privadas)
 
-Acceso al README.md de la carpeta: [README.md](09ALB_RDS_EC2Privadas/README.md)
+Acceso al README.md de la carpeta: [README.md](10ALB_RDS_EC2Privadas/README.md)
   
 * `10AWS_ALB_EC2Privadas_Export.yaml`: ALB, Target Groups, Listeners, Route53 privada, ACM, 3 instancias EC2 ubuntu privadas, Puerta de enlace IPv6 EIGW, 1 EC2 ubuntu bastión en red pública [ALB, Target Groups, zona en Route53 privada, ACM, EC2, etc. ](10ALB_RDS_EC2Privadas/10AWS_ALB_EC2Privadas_Export.yaml)
 
-* `10AWS_ALB_EC2Privadas_Import.yaml`: Crea un RDS, crea registros en la zona privada en Route53 y una instancia EC2 bastión cuyo user data crea el diseño de la base de datos  [RDS, Route53](10AWS_RDS_EC2Privadas_Import.yaml)
+* `10AWS_ALB_EC2Privadas_Import.yaml`: Crea un RDS, crea registros en la zona privada en Route53 y una instancia EC2 bastión cuyo user data crea el diseño de la base de datos  [RDS, Route53](10ALB_RDS_EC2Privadas/10AWS_RDS_EC2Privadas_Import.yaml)
 
 ## :trident: AWS Academy y AWS Cli
 
