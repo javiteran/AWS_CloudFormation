@@ -56,4 +56,4 @@ Con este fichero se creará el siguiente entorno de tareas:
 
 En la carpeta MicrosoftVisio se pueden encontrar los diagramas de Microsoft Visio de la plantilla de CloudFormation.
 
-[AWSAcademy_IaC_AWSCloudFormation.vsdx](MicrosoftVisio/)
+[AWSAcademy_IaC_AWSCloudFormation.vsdx](../MicrosoftVisio/)
