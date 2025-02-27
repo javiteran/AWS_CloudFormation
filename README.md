@@ -2,7 +2,7 @@
 
 Cuando utilizamos AWS Academy y su learner lab puede interesarnos personalizar el entorno de los alumnos.
 
-Muestra una posible solución de automatización de la creación de entornos de tareas en AWS con AWS CloudFormation.
+Muestra una posible solución de automatización de la creación de entornos de tareas, exámenes, pruebas en AWS con AWS CloudFormation.
 
 ## :gear: Referencia de comandos AWS CloudFormation
 

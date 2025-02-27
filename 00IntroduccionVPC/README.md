@@ -18,3 +18,7 @@ las tablas de enrutamiento y asociar las subredes a las tablas de enrutamiento.
         Type: AWS::EC2::RouteTable
         Type: AWS::EC2::Route
         Type: AWS::EC2::SubnetRouteTableAssociation
+
+## 01 AWS CloudFormation Introducción. VPC IPv4/IPv6. IaC. AWS Academy. Youtube
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/ucQQ7mo-g3Y?si=wovR_NgdmHDnc57d" title="01 AWS CloudFormation Introducción. VPC IPv4/IPv6. IaC. AWS Academy" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
