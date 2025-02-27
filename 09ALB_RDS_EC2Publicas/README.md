@@ -2,6 +2,12 @@
 
 Este directorio contiene plantillas de AWS CloudFormation para crear una arquitectura que incluye un balanceador de carga de aplicaciones (ALB), una base de datos RDS MySQL y una instancia EC2 pública.
 
+## Creación del entorno de tareas
+
+Con este fichero se creará el siguiente entorno de tareas:
+
+![AWSAcademy_IaC_AWSCloudFormation_09ALB_RDS_EC2Publicas.PNG](../imagenes/AWSAcademy_IaC_AWSCloudFormation_09ALB_RDS_EC2Publicas.PNG)
+
 ## Archivos
 
 - `09AWS_ALB_EC2Publicas_Export.yaml`: Plantilla que crea el balanceador, el grupo de destinos, 3 instancias EC2 con la aplicacion, ACM, y nombre para exportar los recursos necesarios en la siguiente pila.
@@ -45,12 +51,12 @@ Para crear el stack, utiliza el siguiente comando:
 aws cloudformation create-stack --stack-name MiStack --template-body file://09AWS_RDS_EC2Publicas_Import.yaml --parameters ParameterKey=NN,ParameterValue=03
 ```
 
-
 Para eliminar el stack, utiliza el siguiente comando:
 
 ```sh
 aws cloudformation delete-stack --stack-name MiStack
 ```
+
 Para validar la plantilla, utiliza el siguiente comando:
 
 ```sh
@@ -118,12 +124,6 @@ Para validar la plantilla, utiliza el siguiente comando:
 ```sh
 aws cloudformation validate-template --template-body file://09AWS_RDS_EC2Publicas_Import.yaml
 ```
-
-## Creación del entorno de tareas
-
-Con este fichero se creará el siguiente entorno de tareas:
-
-![AWSAcademy_IaC_AWSCloudFormation_09ALB_RDS_EC2Publicas.PNG](../imagenes/AWSAcademy_IaC_AWSCloudFormation_09ALB_RDS_EC2Publicas.PNG)
 
 ## :blue_book:Diagramas de microsoft Visio
 
