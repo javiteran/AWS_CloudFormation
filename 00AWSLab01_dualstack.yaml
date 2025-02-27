@@ -391,18 +391,16 @@ Resources:
                 Invoke-WebRequest -Uri $npcapInstaller -OutFile $npcapPath
                 Start-Process -FilePath $npcapPath -ArgumentList "/S" -Wait
 
-                Invoke-WebRequest -Uri https://aka.ms/getwinget -OutFile winget.msixbundle
-                Add-AppxPackage winget.msixbundle
-                del winget.msixbundle
-
+                #El winget parece que no funciona si no se ha iniciado sesión previamente en el servidor
                 # Instalar Visual Studio Code usando winget
-                winget install -e --id Microsoft.VisualStudioCode
+                #winget install -e --id Microsoft.VisualStudioCode
                 # Instalar AWS CLI usando winget
-                winget install -e --id Amazon.AWSCLI
+                #winget install -e --id Amazon.AWSCLI
                 # Descargar e instalar Thunderbird
-                winget install -e --id Mozilla.Thunderbird
+                #winget install -e --id Mozilla.Thunderbird
 
-                </powershell>                
+                </powershell>    
+                <persist>true</persist>            
             Tags:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-ws'
