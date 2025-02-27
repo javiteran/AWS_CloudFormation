@@ -88,7 +88,7 @@ aws cloudformation validate-template --template-body file://00AWSLab01_dualstack
 
 En la carpeta MicrosoftVisio se pueden encontrar los diagramas de Microsoft Visio de la plantilla de CloudFormation.
 
-[000AWSCrearVPC_EC2Win_Ubu.vsdx](MicrosoftVisio/)
+[00AWSCrearVPC_EC2Win_Ubu.vsdx](MicrosoftVisio/)
 
 ## :chart: AWS Academy CloudFormation. Otros ejemplos
 

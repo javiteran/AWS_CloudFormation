@@ -51,3 +51,9 @@ Explicación de funciones para tratamiento CIDR de direcciones IPv4 e IPv6 en VP
 Con este fichero se creará el siguiente entorno de tareas:
 
 ![AWSAcademy_IaC_AWSCloudFormation_00IntroduccionVPC.PNG](../imagenes/AWSAcademy_IaC_AWSCloudFormation_00IntroduccionVPC.PNG)
+
+## :blue_book:Diagramas de microsoft Visio
+
+En la carpeta MicrosoftVisio se pueden encontrar los diagramas de Microsoft Visio de la plantilla de CloudFormation.
+
+[AWSAcademy_IaC_AWSCloudFormation.vsdx](MicrosoftVisio/)
