@@ -275,7 +275,8 @@ Resources:
               apt-get update -y
               apt-get upgrade -y
               apt-get install bind9 -y
-              apt-get install apache2 php -php-mysql -y
+              apt install apache2  -y
+              apt install php php-mysql -y
           Tags:
             - Key: Name
               Value: !Sub '${NombreProyecto}${NN}-us'
@@ -375,26 +376,30 @@ Resources:
                 Install-WindowsFeature -name Web-Server -IncludeManagementTools  
 
                 # Crear un archivo en la carpeta Temp
-                $file = $env:SystemRoot + "\Temp\" + (Get-Date).ToString("MM-dd-yy-hh-mm")
+                New-Item -Path "C:\" -Name "Temp" -ItemType "directory"
+                $file = "C:\Temp\" + (Get-Date).ToString("MM-dd-yy-hh-mm")
                 New-Item $file -ItemType file
-                # Instalar Visual Studio Code usando winget
-                winget install -e --id Microsoft.VisualStudioCode     
-                # Instalar AWS CLI usando winget
-                winget install -e --id Amazon.AWSCLI           
-
-
+                
                 # Descargar e instalar Wireshark
-                $wiresharkInstaller = "https://1.na.dl.wireshark.org/win64/Wireshark-win64-3.6.0.exe"
+                $wiresharkInstaller = "https://1.na.dl.wireshark.org/win64/Wireshark-4.4.5-x64.exe"
                 $wiresharkPath = "C:\Temp\WiresharkInstaller.exe"
                 Invoke-WebRequest -Uri $wiresharkInstaller -OutFile $wiresharkPath
                 Start-Process -FilePath $wiresharkPath -ArgumentList "/S" -Wait
 
+                $npcapInstaller = "https://npcap.com/dist/npcap-1.81.exe"
+                $npcapPath = "C:\Temp\npcap.exe"
+                Invoke-WebRequest -Uri $npcapInstaller -OutFile $npcapPath
+                Start-Process -FilePath $npcapPath -ArgumentList "/S" -Wait
+
+                Invoke-WebRequest -Uri https://aka.ms/getwinget -OutFile winget.msixbundle
+                Add-AppxPackage winget.msixbundle
+                del winget.msixbundle
+
+                # Instalar Visual Studio Code usando winget
+                winget install -e --id Microsoft.VisualStudioCode
+                # Instalar AWS CLI usando winget
+                winget install -e --id Amazon.AWSCLI
                 # Descargar e instalar Thunderbird
-                #$thunderbirdInstaller = "https://download-installer.cdn.mozilla.net/pub/thunderbird/releases/91.3.2/win64/en-US/Thunderbird%20Setup%2091.3.2.exe"
-                #$thunderbirdPath = "C:\Temp\ThunderbirdInstaller.exe"
-                #Invoke-WebRequest -Uri $thunderbirdInstaller -OutFile $thunderbirdPath
-                #Start-Process -FilePath $thunderbirdPath -ArgumentList "/S" -Wait
-                
                 winget install -e --id Mozilla.Thunderbird
 
                 </powershell>                
@@ -409,32 +414,15 @@ Resources:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-ws-ip'
 Outputs:
-    Proyecto:
-        Description: Nombre del proyecto
-        Value: !Sub '${NombreProyecto}${NN}'
-        Export:
-            Name:  "Proyecto"
-    UbuntuInstance:
-        Description: Ubuntu Instance Public IP
+    IPv4Ubuntu:
+        Description: IP publica Ubuntu
         Value: !GetAtt UbuntuInstance.PublicIp
-    WindowsInstance:
-        Description: Windows Instance Public IP
+    IPv4Windows:
+        Description: IP publica Windows
         Value: !GetAtt WindowsInstance.PublicIp
     VPCId:
         Description: "VPC ID"
         Value: !Ref VPC
-    PublicSubnet1Id:
-        Description: "Public Subnet 1 ID"
-        Value: !Ref PublicSubnet1
-    PublicSubnet2Id:
-        Description: "Public Subnet 2 ID"
-        Value: !Ref PublicSubnet2
-    PrivateSubnet1Id:
-        Description: "Private Subnet 1 ID"
-        Value: !Ref PrivateSubnet1
-    PrivateSubnet2Id:
-        Description: "Private Subnet 2 ID"
-        Value: !Ref PrivateSubnet2
     httpUbuntu:
         Description: URL de la instancia Ubuntu
         Value: !Sub 'http://${UbuntuElasticIp}'
