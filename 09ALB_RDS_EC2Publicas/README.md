@@ -4,8 +4,8 @@ Este directorio contiene plantillas de AWS CloudFormation para crear una arquite
 
 ## Archivos
 
-- `09AWS_ALB_EC2Publicas_Export.yaml`: Plantilla para exportar los recursos necesarios.
-- `09AWS_RDS_EC2Publicas_Import.yaml`: Plantilla para importar y crear los recursos, incluyendo la base de datos RDS y la instancia EC2.
+- `09AWS_ALB_EC2Publicas_Export.yaml`: Plantilla que crea el balanceador, el grupo de destinos, 3 instancias EC2 con la aplicacion, ACM, y nombre para exportar los recursos necesarios en la siguiente pila.
+- `09AWS_RDS_EC2Publicas_Import.yaml`: Plantilla para importar y crear los recursos, incluyendo la base de datos RDS y la instancia EC2 Bastión.
 
 ## Descripción de las Plantillas
 
