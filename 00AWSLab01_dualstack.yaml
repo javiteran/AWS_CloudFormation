@@ -248,9 +248,9 @@ Resources:
                 ToPort: 22
                 CidrIpv6: ::/0
                 Description: Permitir SSH IPv6
-#              - IpProtocol: '-1'
-#                SourceSecurityGroupId: !Ref WindowsSecurityGroup
-#                Description: Permitir trafico desde el grupo de seguridad de Windows
+              - IpProtocol: '-1'
+                CidrIp: !Sub '10.25.1${NN}.128/25'
+                Description: Permitir trafico desde el grupo de seguridad de Windows
                 # Esto no es muy seguro pero facilita la realización de las tareas. Incluido el ICMP e ICMPv6
             Tags:
                 - Key: Name
@@ -349,19 +349,20 @@ Resources:
             Tags:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-ws-sg'
+
     # Creacion de instancia Windows
     WindowsInstance:
         Type: AWS::EC2::Instance
         Properties:
             ImageId: !Ref AMIWindows
-            InstanceType: t2.medium
+            InstanceType: t3.medium
             KeyName: vockey
             Monitoring: false
             SecurityGroupIds:
                 - !Ref WindowsSecurityGroup
             SubnetId: !Ref PublicSubnet2
             PrivateIpAddress: !Sub '10.25.1${NN}.200'
-            UserData: # Instala IIS
+            UserData: 
               Fn::Base64: !Sub |
                 <powershell>
                 Write-Host 'User data para Windows Server'
@@ -370,12 +371,11 @@ Resources:
                 # Desactivar el firewall de windows . Cuidado! ;-)
                 Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
                 # Modificar las propiedades TCP/IP de la tarjeta de red para añadir los servidores DNS
-                Get-DnsClient | Set-DnsClientServerAddress -ServerAddresses ("10.25.1${NN}.100","10.25.1${NN}.200")
+                #Get-DnsClient | Set-DnsClientServerAddress -ServerAddresses ("10.25.1${NN}.100","10.25.1${NN}.200")
                 # Instalar Internet Information Services (IIS)
-                #Install-WindowsFeature -Name Web-Server -IncludeManagementTools  # -IncludeAllSubFeature
-                Install-WindowsFeature -name Web-Server -IncludeManagementTools  
+                Install-WindowsFeature -Name Web-Server -IncludeManagementTools  # -IncludeAllSubFeature
 
-                # Crear un archivo en la carpeta Temp
+                # Crear carpeta TEMP y un archivo en esa carpeta
                 New-Item -Path "C:\" -Name "Temp" -ItemType "directory"
                 $file = "C:\Temp\" + (Get-Date).ToString("MM-dd-yy-hh-mm")
                 New-Item $file -ItemType file
@@ -386,21 +386,14 @@ Resources:
                 Invoke-WebRequest -Uri $wiresharkInstaller -OutFile $wiresharkPath
                 Start-Process -FilePath $wiresharkPath -ArgumentList "/S" -Wait
 
-                $npcapInstaller = "https://npcap.com/dist/npcap-1.81.exe"
-                $npcapPath = "C:\Temp\npcap.exe"
-                Invoke-WebRequest -Uri $npcapInstaller -OutFile $npcapPath
-                Start-Process -FilePath $npcapPath -ArgumentList "/S" -Wait
-
-                #El winget parece que no funciona si no se ha iniciado sesión previamente en el servidor
-                # Instalar Visual Studio Code usando winget
-                #winget install -e --id Microsoft.VisualStudioCode
-                # Instalar AWS CLI usando winget
-                #winget install -e --id Amazon.AWSCLI
-                # Descargar e instalar Thunderbird
-                #winget install -e --id Mozilla.Thunderbird
-
+                #$npcapInstaller = "https://npcap.com/dist/npcap-1.81.exe"
+                #$npcapPath = "C:\Temp\npcap.exe"
+                #Invoke-WebRequest -Uri $npcapInstaller -OutFile $npcapPath
+                #Start-Process -FilePath $npcapPath -ArgumentList "/S" -Wait
                 </powershell>    
-                <persist>true</persist>            
+                #Si quieres que se repita cada vez que se inicie la instancia, descomenta la siguiente línea
+                #Reinstalaría el programa cada vez que se reinicie la instancia
+                #<persist>true</persist>            
             Tags:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-ws'
@@ -413,19 +406,19 @@ Resources:
                   Value: !Sub '${NombreProyecto}${NN}-ws-ip'
 Outputs:
     IPv4Ubuntu:
-        Description: IP publica Ubuntu
+        Description: IPv4 publica Ubuntu
         Value: !GetAtt UbuntuInstance.PublicIp
     IPv4Windows:
-        Description: IP publica Windows
+        Description: IPv4 publica Windows
         Value: !GetAtt WindowsInstance.PublicIp
     VPCId:
         Description: "VPC ID"
         Value: !Ref VPC
     httpUbuntu:
-        Description: URL de la instancia Ubuntu
+        Description: URL IPv4 de la instancia Ubuntu
         Value: !Sub 'http://${UbuntuElasticIp}'
     httpWindows:
-        Description: URL de la instancia Windows
+        Description: URL IPv4 de la instancia Windows
         Value: !Sub 'http://${WindowsElasticIp}'
     sshUbuntu:
         Description: SSH a la instancia Ubuntu
