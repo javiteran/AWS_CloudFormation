@@ -419,7 +419,7 @@ Resources:
                 #!/bin/bash
                 apt -y update
                 apt -y upgrade
-                apt install -y apache2 php php-mysql mysql-client
+                apt install -y apache2 php php-mysql mysql-client php-curl
                 cd /var/www/html/
                 rm index.html
                 git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
@@ -468,7 +468,7 @@ Resources:
                 #!/bin/bash
                 apt -y update
                 apt -y upgrade
-                apt install -y apache2 php php-mysql mysql-client
+                apt install -y apache2 php php-mysql mysql-client php-curl
                 cd /var/www/html/
                 rm index.html
                 git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
@@ -517,7 +517,7 @@ Resources:
                 #!/bin/bash
                 apt -y update
                 apt -y upgrade
-                apt install -y apache2 php php-mysql mysql-client
+                apt install -y apache2 php php-mysql mysql-client php-curl
                 cd /var/www/html/
                 rm index.html
                 git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
