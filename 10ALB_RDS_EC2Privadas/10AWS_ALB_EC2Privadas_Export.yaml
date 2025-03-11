@@ -3,7 +3,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
     Creacion de una VPC, 4 subredes publicas y privadas, internet gateway, EIGW IPv6 y tabla de rutas con IPv4 e IPv6
     Ademas creara :
-        - 2 instancias EC2 Ubuntu Server 24.04 en subredes privadas
+        - 3 instancias EC2 Ubuntu Server 24.04 en subredes privadas
         - 1 instancia EC2 Ubuntu Server 24.04 bastión con IPv4 elastica
         - 1 balanceador de carga con 3 destinos en subredes privadas
         - 1 zona DNS privada con registros para el balanceador y el bastion
@@ -19,7 +19,7 @@ Parameters:
     NombreProyecto:
         Description: Nombre del proyecto.
         Type: String
-        Default: 'Balance24'         
+        Default: 'Balance25'         
     NN:
         Type: Number
         Description: Numero de alumno.
@@ -28,7 +28,7 @@ Parameters:
         MinValue: 1
         MaxValue: 50
     AMIUbuntu:
-        Description: AMI ID Ubuntu Server 24.04.
+        Description: AMI ID Ubuntu Server 25.04.
         Type: String
         Default: 'ami-04b4f1a9cf54c11d0'    
     AgenteEscuchaHttps:
@@ -56,7 +56,7 @@ Resources:
     VPC:
         Type: AWS::EC2::VPC
         Properties:
-            CidrBlock: 10.24.0.0/16
+            CidrBlock: 10.25.0.0/16
             EnableDnsHostnames: true
             EnableDnsSupport: true
             Tags:
@@ -380,7 +380,7 @@ Resources:
               - !Ref UbuntuBastionSecurityGroup
           SubnetId: !Ref SubredPublica1
           Ipv6AddressCount: 1 # Asigna una direccion IPv6
-          #PrivateIpAddress: !Sub '10.24.1${NN}.100'
+          #PrivateIpAddress: !Sub '10.25.1${NN}.100'
           UserData:
             Fn::Base64: !Sub |
               #!/bin/bash
@@ -544,7 +544,7 @@ Resources:
                 DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
 
     # Balanceador de carga
-    MyLoadBalancer:
+    MiALB:
         Type: AWS::ElasticLoadBalancingV2::LoadBalancer
         Properties:
             #Name: !Sub '${AWS::StackName}-alb'
@@ -562,7 +562,7 @@ Resources:
                   Value: !Sub '${NombreProyecto}${NN}-alb'
 
     # Target Group. Grupo de destinos
-    MyTargetGroup:
+    MiGrupoDestinos:
         Type: AWS::ElasticLoadBalancingV2::TargetGroup
         Properties:
             #Name: !Sub '${AWS::StackName}-tg'
@@ -589,18 +589,18 @@ Resources:
                   Value: !Sub '${NombreProyecto}${NN}-tg'
 
     # Listener. Escucha en el puerto 80 y redirige al target group
-    MyListenerHttp:
+    MiListenerHttp:
         Type: AWS::ElasticLoadBalancingV2::Listener
         Properties:
             DefaultActions:
                 - Type: forward
-                  TargetGroupArn: !Ref MyTargetGroup
-            LoadBalancerArn: !Ref MyLoadBalancer
+                  TargetGroupArn: !Ref MiGrupoDestinos
+            LoadBalancerArn: !Ref MiALB
             Port: 80
             Protocol: HTTP            
 
     # Route53. Creación de zona privada y sus registros para el proyecto
-    PrivateHostedZone:
+    MiZonaPrivadaHosteada:
         Type: AWS::Route53::HostedZone
         Properties:
             Name: !Sub '${NombreProyecto}${NN}.es'
@@ -610,20 +610,20 @@ Resources:
             HostedZoneConfig:
                 Comment: !Sub 'Zona privada ${NombreProyecto}${NN}'
 
-    MyRecordSetALB:
+    MiRecordSetALB:
         Type: AWS::Route53::RecordSet
         Properties:
-            HostedZoneId: !Ref PrivateHostedZone
+            HostedZoneId: !Ref MiZonaPrivadaHosteada
             Name: !Sub 'www.${NombreProyecto}${NN}.es'
             Type: CNAME
             TTL: '60'
             ResourceRecords:
-                - !GetAtt MyLoadBalancer.DNSName
+                - !GetAtt MiALB.DNSName
 
-    MyRecordSetBastion:
+    MiRecordSetBastion:
         Type: AWS::Route53::RecordSet
         Properties:
-            HostedZoneId: !Ref PrivateHostedZone
+            HostedZoneId: !Ref MiZonaPrivadaHosteada
             Name: !Sub 'bastion.${NombreProyecto}${NN}.es'
             Type: A
             TTL: '60'
@@ -646,14 +646,14 @@ Resources:
                   Value: !Sub '${NombreProyecto}${NN}-cert'
 
     # Listener. Escucha en el puerto 443 y redirige al target group
-    MyListenerHttps:
+    MiListenerHttps:
         Type: AWS::ElasticLoadBalancingV2::Listener
         Condition: UsarHttps
         Properties:
             DefaultActions:
                 - Type: forward
-                  TargetGroupArn: !Ref MyTargetGroup
-            LoadBalancerArn: !Ref MyLoadBalancer
+                  TargetGroupArn: !Ref MiGrupoDestinos
+            LoadBalancerArn: !Ref MiALB
             Port: 443
             Protocol: HTTPS
             Certificates:
@@ -710,6 +710,14 @@ Outputs:
             Name: MiBastionSGID  # Exporta el ID del grupo de seguridad de los destinos para darle acceso a la base de datos
     ZonaDNSPrivada:
         Description: Zona DNS privada
-        Value: !Ref PrivateHostedZone
+        Value: !Ref MiZonaPrivadaHosteada
         Export:
             Name: MiZonaDNSPrivada  # Exporta el ID de la zona DNS privada
+    URLBalanceadorHttp:
+        Description: URL del balanceador
+        #Muestra la URL del balanceador de carga en formato http://xxxxx
+        Value: !Sub 'http://${MiALB.DNSName}'
+    URLBalanceadorHttps:    
+        Description: URL del balanceador con https
+        Condition: UsarHttps
+        Value: !Sub 'https://${MiALB.DNSName}'

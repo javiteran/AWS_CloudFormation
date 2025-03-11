@@ -1,0 +1,724 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+    Creacion de una VPC, 4 subredes publicas y privadas, internet gateway, EIGW IPv6 y tabla de rutas con IPv4 e IPv6
+    Ademas creara :
+        - 3 instancias EC2 Ubuntu Server 24.04 en subredes publicas
+        - 1 instancia EC2 Ubuntu Server 24.04 bastión con IPv4 elastica
+        - 1 balanceador de carga con 3 destinos en subredes publicas
+        - 1 zona DNS privada con registros para el balanceador y el bastion
+    Utilizado CloudFormation para AWS Academy Learning Lab
+    Autor: Javier Teran Gonzalez
+    Fecha creacion:     12/02/2025
+    Version: 1.20
+        Modificaciones: 21/02/2025. Inicio
+            - Se incluye un parametro para la creacion de un certificado en ACM para el balanceador de carga. Exige un registro DNS publico y una acción manual
+            - Ejemplo basura para usar con BBDD RDS. Obtenido de un repositorio de GitHub
+Parameters:
+    NombreProyecto:
+        Description: Nombre del proyecto.
+        Type: String
+        Default: 'albp25'         
+    NN:
+        Type: Number
+        Description: Numero de alumno.
+        Default: 15
+        ConstraintDescription: 'Debe estar en el rango del [1-50]'
+        MinValue: 1
+        MaxValue: 50
+    AMIUbuntu:
+        Description: AMI ID Ubuntu Server 24.04.
+        Type: String
+        Default: 'ami-04b4f1a9cf54c11d0'    
+    AgenteEscuchaHttps:
+        Description: |
+            El agente de escucha del balanceador debe hacerlo por https?. 
+            Si respondes que si tendras que validad manualmente en tu DNS publico la peticion del certificado creado en el servicio AWS Certificate Manager (ACM).
+        Type: String
+        Default: 'No Https'
+        AllowedValues:
+            - 'Si Https'
+            - 'No Https'
+    FQDNBalanceador:
+        Description: | 
+            Registro DNS para el balanceador de carga en tu DNS publico. Ejemplo: alb.alisal01.com.es.
+            Necesario si has respondido si en AgenteEscuchaHttps. 
+            Tendras que crear un registro CNAME manual en tu DNS apuntando al DNS del balanceador.
+        Type: String
+        Default: 'alb.alisal01.com.es'    
+
+Conditions:
+    UsarHttps: !Equals [ !Ref AgenteEscuchaHttps, Si Https ]
+
+#Recursos del proyecto        
+Resources:
+    VPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: 10.25.0.0/16
+            EnableDnsHostnames: true
+            EnableDnsSupport: true
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-vpc'
+    IPv6CidrBlock:
+        Type: AWS::EC2::VPCCidrBlock
+        Properties:
+            VpcId: !Ref VPC
+            AmazonProvidedIpv6CidrBlock: true
+
+    # SubRedes publicas
+    SubredPublica1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock:      !Select [0, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [0, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPublica1'
+
+    SubredPublica2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock:      !Select [1, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [1, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPublica2'
+
+    SubredPublica3:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock:      !Select [2, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [2, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 2, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPublica3'
+
+    # SubRedes privadas
+    SubredPrivada1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock:      !Select [6, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [6, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPrivada1'
+
+    SubredPrivada2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock:      !Select [7, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [7, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPrivada2'
+
+    SubredPrivada3:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock:      !Select [8, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+            Ipv6CidrBlock:  !Select [8, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone: !Select [ 2, !GetAZs '' ]
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-SubredPrivada3'
+
+    # Internet Gateway y EgressOnlyInternetGateway
+    InternetGateway:
+        Type: AWS::EC2::InternetGateway
+        Properties:
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-igw'
+
+    VPCGatewayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            VpcId: !Ref VPC
+            InternetGatewayId: !Ref InternetGateway
+
+    # Puerta de enlace de internet solo de salida para IPv6 EIGW    
+#    MiEgressOnlyInternetGateway:
+#        Type: AWS::EC2::EgressOnlyInternetGateway
+#        Properties: 
+#            VpcId: !Ref VPC
+
+    # Tabla de rutas publica
+    TablaRutasPublica:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                -   Key: Name
+                    Value: !Sub '${NombreProyecto}${NN}-rtb-publica'
+
+    # Tablas de rutas privadas
+    TablaRutasPrivada1:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                -   Key: 'Name'
+                    Value: !Sub '${NombreProyecto}${NN}-rtb-privada1'
+
+    TablaRutasPrivada2:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                -   Key: 'Name'
+                    Value: !Sub '${NombreProyecto}${NN}-rtb-privada2'
+
+    TablaRutasPrivada3:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                -   Key: 'Name'
+                    Value: !Sub '${NombreProyecto}${NN}-rtb-privada3'
+
+
+    # Rutas por defecto para la tabla de rutas publica. Tanto IPv4 como IPv6
+    DefaultRouteIPv4:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref TablaRutasPublica
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: !Ref InternetGateway
+    
+    DefaultRouteIPv6:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref TablaRutasPublica
+            DestinationIpv6CidrBlock: ::/0
+            GatewayId: !Ref InternetGateway
+
+    # Rutas por defecto para las tabla de rutas privadas. Para IPv6 de solo salida.
+    # Las instancias en subredes privadas pueden salir a internet pero no se puede acceder a ellas desde internet.
+#    DefaultRouteIPv6SoloSalida0:
+#        Type: AWS::EC2::Route
+#        DependsOn: MiEgressOnlyInternetGateway
+#        Properties:
+#            RouteTableId: !Ref TablaRutasPrivada1
+#            DestinationIpv6CidrBlock: ::/0
+#            EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
+
+#    DefaultRouteIPv6SoloSalida1:
+#        Type: AWS::EC2::Route
+#        DependsOn: MiEgressOnlyInternetGateway
+#        Properties:
+#            RouteTableId: !Ref TablaRutasPrivada2
+#            DestinationIpv6CidrBlock: ::/0
+#            EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
+
+#    DefaultRouteIPv6SoloSalida2:
+#        Type: AWS::EC2::Route
+#        DependsOn: MiEgressOnlyInternetGateway
+#        Properties:
+#            RouteTableId: !Ref TablaRutasPrivada3
+#            DestinationIpv6CidrBlock: ::/0
+#            EgressOnlyInternetGatewayId: !Ref MiEgressOnlyInternetGateway
+
+    # Asociacion de subredes publicas con tabla de rutas
+    SubnetRouteTableAssociation0:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPublica1
+            RouteTableId: !Ref TablaRutasPublica
+
+    SubnetRouteTableAssociation1:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPublica2
+            RouteTableId: !Ref TablaRutasPublica
+
+    SubnetRouteTableAssociation2:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPublica3
+            RouteTableId: !Ref TablaRutasPublica
+
+    # Asociacion de subredes privadas con sus tablas de rutas
+    SubnetRouteTableAssociation6:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPrivada1
+            RouteTableId: !Ref TablaRutasPrivada1
+
+    SubnetRouteTableAssociation7:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPrivada2
+            RouteTableId: !Ref TablaRutasPrivada2
+
+    SubnetRouteTableAssociation8:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPrivada3
+            RouteTableId: !Ref TablaRutasPrivada3
+
+##### INSTANCIAS
+    # Grupo de seguridad Ubuntu. Puertos HTTP, HTTPS y SSH
+    UbuntuDestinosSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: !Sub '${NombreProyecto}${NN}-usalb-sg'
+            GroupDescription: !Sub '${NombreProyecto}${NN}-usalb-sg'
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                #CidrIp: 0.0.0.0/0
+                #SourceSecurityGroupId: !Ref UbuntuBastionSecurityGroup
+                CidrIp:  !Select [6, !Cidr [            !GetAtt VPC.CidrBlock, 16,12]]
+                Description: Permitir SSH IPv4
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                #SourceSecurityGroupId: !Ref UbuntuBastionSecurityGroup
+                #idrIpv6: ::/0
+                CidrIpv6: !Select [0, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+                Description: Permitir SSH IPv6
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                #CidrIpv6: ::/0
+                SourceSecurityGroupId: !Ref BalanceadorSecurityGroup
+                Description: Permitir HTTP IPv6 desde el ALB
+#              - IpProtocol: '-1'
+#                SourceSecurityGroupId: !Ref UbuntuSecurityGroup
+#                Description: Permitir trafico desde el grupo de seguridad de Ubuntu
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-usalb-sg'
+
+#    # Grupo de seguridad Ubuntu. Puertos DNS, HTTP, HTTPS y SSH
+#    UbuntuBastionSecurityGroup:
+#        Type: AWS::EC2::SecurityGroup
+#        Properties:
+#            GroupName: !Sub '${NombreProyecto}${NN}-usbastion-sg'
+#            GroupDescription: !Sub '${NombreProyecto}${NN}-usbastion-sg'
+#            VpcId: !Ref VPC
+#            SecurityGroupIngress:           
+#              - IpProtocol: tcp
+#                FromPort: 22
+#                ToPort: 22
+#                CidrIp: 0.0.0.0/0
+#                Description: Permitir SSH IPv4            
+#              - IpProtocol: tcp
+#                FromPort: 22
+#                ToPort: 22
+#                CidrIpv6: ::/0
+#                Description: Permitir SSH IPv6
+#            Tags:
+#                - Key: Name
+#                  Value: !Sub '${NombreProyecto}${NN}-usbastion-sg'
+#
+    BalanceadorSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: !Sub '${NombreProyecto}${NN}-alb-sg'
+            GroupDescription: !Sub '${NombreProyecto}${NN}-alb-sg'
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIp: 0.0.0.0/0
+                Description: Permitir HTTP IPv4       
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIp: 0.0.0.0/0
+                Description: Permitir HTTPS IPv4           
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIpv6: ::/0
+                Description: Permitir HTTP IPv6           
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIpv6: ::/0
+                Description: Permitir HTTPS IPv6            
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-alb-sg'
+
+#    # Creacion de instancia Ubuntu
+#    UbuntuBastion:
+#        Type: AWS::EC2::Instance
+#        Properties:
+#          ImageId: !Ref AMIUbuntu
+#          InstanceType: t2.micro
+#          KeyName: vockey
+#          Monitoring: false
+#          SecurityGroupIds:
+#              - !Ref UbuntuBastionSecurityGroup
+#          SubnetId: !Ref SubredPublica1
+#          UserData:
+#            Fn::Base64: !Sub |
+#              #!/bin/bash
+#              echo 'User data para Ubuntu Server'
+#              apt-get update -y
+#              apt-get upgrade -y
+#          Tags:
+#            - Key: Name
+#              Value: !Sub '${NombreProyecto}${NN}-us-bastion'
+#          BlockDeviceMappings:
+#            - DeviceName: /dev/sda1  # El volumen raíz de la instancia
+#              Ebs:
+#                VolumeSize: 20  # Tamaño del volumen en GB
+#                VolumeType: gp3  # Tipo de volumen
+#                DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
+#    UbuntuElasticIp:
+#        Type: AWS::EC2::EIP
+#        Properties:
+#            InstanceId: !Ref UbuntuBastion
+#            Tags:
+#                - Key: Name
+#                  Value: !Sub '${NombreProyecto}${NN}-us-ip'
+#
+# Instancias en subredes privadas para los destinos del balanceador
+    UbuntuDestino1:
+        Type: AWS::EC2::Instance
+        Properties:
+          ImageId: !Ref AMIUbuntu
+          InstanceType: t2.micro
+          KeyName: vockey
+          Monitoring: false
+          NetworkInterfaces:
+              - DeviceIndex: 0
+                AssociatePublicIpAddress: true
+                SubnetId: !Ref SubredPublica1
+                GroupSet: 
+                    - !Ref UbuntuDestinosSecurityGroup
+          UserData:
+            Fn::Base64: !Sub |
+                #!/bin/bash
+                apt -y update
+                apt -y upgrade
+                apt install -y apache2 php php-mysql mysql-client
+                cd /var/www/html/
+                rm index.html
+                git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
+                cp vars-sample.php vars.php
+                service apache2 restart
+
+                #Modificar el fichero de configuración de la BBDD
+                #para que funcione la aplicación                                                                       
+                BBDDUsuario="admin"
+                BBDDPassword="admin12345"
+                BBDDServidor="rds.${NombreProyecto}${NN}.es"
+                BBDD="MiBaseDatos"
+                NumServidor=$RANDOM
+
+                # Cambiar el fichero de constantes por los datos correctos
+                sed -i "s/localhost/$BBDDServidor/g"    /var/www/html/vars.php
+                sed -i "s/user/$BBDDUsuario/g"     	    /var/www/html/vars.php
+                sed -i "s/usuariopass/$BBDDPassword/g"  /var/www/html/vars.php
+                sed -i "s/libros/$BBDD/g"               /var/www/html/vars.php
+                sed -i "s/1Uno/$NumServidor/g"          /var/www/html/vars.php
+          Tags:
+            - Key: Name
+              Value: !Sub '${NombreProyecto}${NN}-us1'
+          BlockDeviceMappings:
+            - DeviceName: /dev/sda1         # El volumen raíz de la instancia
+              Ebs:
+                VolumeSize: 20              # Tamaño del volumen en GB
+                VolumeType: gp3             # Tipo de volumen
+                DeleteOnTermination: true   # El volumen se eliminará cuando la instancia termine
+
+    UbuntuDestino2:
+        Type: AWS::EC2::Instance
+        Properties:
+          ImageId: !Ref AMIUbuntu
+          InstanceType: t2.micro
+          KeyName: vockey
+          Monitoring: false
+          NetworkInterfaces:
+              - DeviceIndex: 0
+                AssociatePublicIpAddress: true
+                SubnetId: !Ref SubredPublica2
+                GroupSet: 
+                    - !Ref UbuntuDestinosSecurityGroup              
+          UserData:
+            Fn::Base64: !Sub |
+                #!/bin/bash
+                apt -y update
+                apt -y upgrade
+                apt install -y apache2 php php-mysql mysql-client
+                cd /var/www/html/
+                rm index.html
+                git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
+                cp vars-sample.php vars.php
+                service apache2 restart
+
+                #Modificar el fichero de configuración de la BBDD
+                #para que funcione la aplicación                                                                       
+                BBDDUsuario="admin"
+                BBDDPassword="admin12345"
+                BBDDServidor="rds.${NombreProyecto}${NN}.es"
+                BBDD="MiBaseDatos"
+                NumServidor=$RANDOM
+
+                # Cambiar el fichero de constantes por los datos correctos
+                sed -i "s/localhost/$BBDDServidor/g"    /var/www/html/vars.php
+                sed -i "s/user/$BBDDUsuario/g"     	    /var/www/html/vars.php
+                sed -i "s/usuariopass/$BBDDPassword/g"  /var/www/html/vars.php
+                sed -i "s/libros/$BBDD/g"               /var/www/html/vars.php
+                sed -i "s/1Uno/$NumServidor/g"          /var/www/html/vars.php
+          Tags:
+            - Key: Name
+              Value: !Sub '${NombreProyecto}${NN}-us2'
+          BlockDeviceMappings:
+            - DeviceName: /dev/sda1         # El volumen raíz de la instancia
+              Ebs:
+                VolumeSize: 20              # Tamaño del volumen en GB
+                VolumeType: gp3             # Tipo de volumen
+                DeleteOnTermination: true   # El volumen se eliminará cuando la instancia termine
+
+    UbuntuDestino3:
+        Type: AWS::EC2::Instance
+        Properties:
+          ImageId: !Ref AMIUbuntu
+          InstanceType: t2.micro
+          KeyName: vockey
+          Monitoring: false
+          NetworkInterfaces:
+              - DeviceIndex: 0
+                AssociatePublicIpAddress: true
+                SubnetId: !Ref SubredPublica3
+                GroupSet: 
+                    - !Ref UbuntuDestinosSecurityGroup
+          UserData:
+            Fn::Base64: !Sub |
+                #!/bin/bash
+                apt -y update
+                apt -y upgrade
+                apt install -y apache2 php php-mysql mysql-client
+                cd /var/www/html/
+                rm index.html
+                git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
+                cp vars-sample.php vars.php
+                service apache2 restart
+
+                #Modificar el fichero de configuración de la BBDD
+                #para que funcione la aplicación                                                                       
+                BBDDUsuario="admin"
+                BBDDPassword="admin12345"
+                BBDDServidor="rds.${NombreProyecto}${NN}.es"
+                BBDD="MiBaseDatos"
+                NumServidor=$RANDOM
+
+                # Cambiar el fichero de constantes por los datos correctos
+                sed -i "s/localhost/$BBDDServidor/g"    /var/www/html/vars.php
+                sed -i "s/user/$BBDDUsuario/g"     	    /var/www/html/vars.php
+                sed -i "s/usuariopass/$BBDDPassword/g"  /var/www/html/vars.php
+                sed -i "s/libros/$BBDD/g"               /var/www/html/vars.php
+                sed -i "s/1Uno/$NumServidor/g"          /var/www/html/vars.php
+          Tags:
+            - Key: Name
+              Value: !Sub '${NombreProyecto}${NN}-us3'
+          BlockDeviceMappings:
+            - DeviceName: /dev/sda1         # El volumen raíz de la instancia
+              Ebs:
+                VolumeSize: 20              # Tamaño del volumen en GB
+                VolumeType: gp3             # Tipo de volumen
+                DeleteOnTermination: true   # El volumen se eliminará cuando la instancia termine
+
+    # Balanceador de carga
+    MiALB:
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+        Properties:
+            Name: !Sub '${NombreProyecto}${NN}-alb'
+            Scheme: internet-facing
+            IpAddressType: dualstack # Soporta IPv4 e IPv6
+            Subnets:
+                - !Ref SubredPublica1
+                - !Ref SubredPublica2
+                - !Ref SubredPublica3
+            SecurityGroups:
+                - !Ref BalanceadorSecurityGroup
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-alb'
+
+    # Target Group. Grupo de destinos
+    MiGrupoDestinos:
+        Type: AWS::ElasticLoadBalancingV2::TargetGroup
+        Properties:
+            Name: !Sub '${NombreProyecto}${NN}-tg'
+            VpcId: !Ref VPC
+            Port: 80
+            Protocol: HTTP
+            TargetType: instance
+            HealthCheckIntervalSeconds: 30
+            HealthCheckPath: /verestado.html
+            HealthCheckProtocol: HTTP
+            HealthCheckTimeoutSeconds: 5
+            HealthyThresholdCount: 5
+            UnhealthyThresholdCount: 2
+            Matcher:
+                HttpCode: 200
+            Targets:
+                - Id: !Ref UbuntuDestino1
+                - Id: !Ref UbuntuDestino2
+                - Id: !Ref UbuntuDestino3
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-tg'
+
+    # Listener. Escucha en el puerto 80 y redirige al target group
+    MiListenerHttp:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Properties:
+            DefaultActions:
+                - Type: forward
+                  TargetGroupArn: !Ref MiGrupoDestinos
+            LoadBalancerArn: !Ref MiALB
+            Port: 80
+            Protocol: HTTP            
+
+    # Route53. Creación de zona privada y sus registros para el proyecto
+    MiZonaPrivadaHosteada:
+        Type: AWS::Route53::HostedZone
+        Properties:
+            Name: !Sub '${NombreProyecto}${NN}.es'
+            VPCs:
+                - VPCId: !Ref VPC
+                  VPCRegion: !Ref 'AWS::Region'
+            HostedZoneConfig:
+                Comment: !Sub 'Zona privada ${NombreProyecto}${NN}'
+
+    MiRecordSetALB:
+        Type: AWS::Route53::RecordSet
+        Properties:
+            HostedZoneId: !Ref MiZonaPrivadaHosteada
+            Name: !Sub 'www.${NombreProyecto}${NN}.es'
+            Type: CNAME
+            TTL: '60'
+            ResourceRecords:
+                - !GetAtt MiALB.DNSName
+
+#    MiRecordSetBastion:
+#        Type: AWS::Route53::RecordSet
+#        Properties:
+#            HostedZoneId: !Ref MiZonaPrivadaHosteada
+#            Name: !Sub 'bastion.${NombreProyecto}${NN}.es'
+#            Type: A
+#            TTL: '60'
+#            ResourceRecords:
+#                - !GetAtt UbuntuBastion.PublicIp
+
+# Certificado con ACM para el balanceador de carga https
+    MiCertificado:
+        Type: AWS::CertificateManager::Certificate
+        Condition: UsarHttps
+        Properties:
+            DomainName: !Ref FQDNBalanceador
+            ValidationMethod: DNS
+            #Esto solo vale si tengo la zona DNS en Route53 y es pública
+            #DomainValidationOptions:
+            #    - DomainName: !Sub '${NombreProyecto}${NN}.es'
+            #      HostedZoneId: !Ref PublicHostedZone
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-cert'
+
+    # Listener. Escucha en el puerto 443 y redirige al target group
+    MiListenerHttps:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Condition: UsarHttps
+        Properties:
+            DefaultActions:
+                - Type: forward
+                  TargetGroupArn: !Ref MiGrupoDestinos
+            LoadBalancerArn: !Ref MiALB
+            Port: 443
+            Protocol: HTTPS
+            Certificates:
+                - CertificateArn: !Ref MiCertificado
+
+Outputs:
+    Proyecto:
+        Description: Nombre del proyecto
+        Value: !Sub '${NombreProyecto}${NN}'
+        Export:
+            Name:  Proyecto
+    #UbuntuBastionIPv4Publica:
+    #    Description: Ubuntu Bastion IPv4 publica
+    #    Value: !GetAtt UbuntuBastion.PublicIp
+    #UbuntuBastionIPv4Publica:
+    #    Description: Ubuntu Bastion IPv6 publica
+    #    Value: !Select [0, !GetAtt UbuntuBastion.Ipv6Addresses]
+    VPCId:
+        Description: 'VPC ID'
+        Value: !Ref VPC
+        Export:
+            Name: MiVPCID   # Exporta el ID de la VPC. Utilizo el export para poder importar el ID de la VPC en otro stack
+                            # En la plantilla destino utilizar --->   VpcId: !ImportValue MiVPCID
+    SubredPublica1Id:
+        Description: 'Subred Publica 1 ID'
+        Value: !Ref SubredPublica1
+        Export:
+            Name: MiSubredPublica1ID  # Exporta el ID de la Subnet 1
+    SubredPrivada1Id:
+        Description: 'Subred Privada 1 ID'
+        Value: !Ref SubredPrivada1
+        Export:
+            Name: MiSubredPrivada1ID  # Exporta el ID de la Subnet 1
+    SubredPrivada2Id:
+        Description: 'Subred Privada 2 ID'
+        Value: !Ref SubredPrivada2
+        Export:
+            Name: MiSubredPrivada2ID  # Exporta el ID de la Subnet 2
+    SubredPrivada3Id:
+        Description: 'Subred Privada 3 ID'
+        Value: !Ref SubredPrivada3
+        Export:
+            Name: MiSubredPrivada3ID  # Exporta el ID de la Subnet 1
+    UbuntuDestinosSecurityGroupId:
+        Description: Grupo de seguridad Ubuntu Destinos ID
+        Value: !Ref UbuntuDestinosSecurityGroup
+        Export:
+            Name: MisDestinosSGID  # Exporta el ID del grupo de seguridad de los destinos para darle acceso a la base de datos
+#    UbuntuBastionSecurityGroupId:
+#        Description: Grupo de seguridad Ubuntu Bastion ID
+#        Value: !Ref UbuntuBastionSecurityGroup
+#        Export:
+#            Name: MiBastionSGID  # Exporta el ID del grupo de seguridad de los destinos para darle acceso a la base de datos
+    ZonaDNSPrivada:
+        Description: Zona DNS privada
+        Value: !Ref MiZonaPrivadaHosteada
+        Export:
+            Name: MiZonaDNSPrivada  # Exporta el ID de la zona DNS privada
+    URLBalanceadorHttp:
+        Description: URL del balanceador
+        #Muestra la URL del balanceador de carga en formato http://xxxxx
+        Value: !Sub 'http://${MiALB.DNSName}'
+    URLBalanceadorHttps:    
+        Description: URL del balanceador con https
+        Condition: UsarHttps
+        Value: !Sub 'https://${MiALB.DNSName}'
