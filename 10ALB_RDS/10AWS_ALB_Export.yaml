@@ -430,7 +430,7 @@ Resources:
                 #Modificar el fichero de configuración de la BBDD
                 #para que funcione la aplicación                                                                       
                 BBDDUsuario="admin"
-                BBDDPassword="admin1234"
+                BBDDPassword="admin12345"
                 BBDDServidor="rds.${NombreProyecto}${NN}.es"
                 BBDD="MiBaseDatos"
                 NumServidor=$RANDOM
@@ -476,7 +476,7 @@ Resources:
                 #Modificar el fichero de configuración de la BBDD
                 #para que funcione la aplicación                                                                       
                 BBDDUsuario="admin"
-                BBDDPassword="admin1234"
+                BBDDPassword="admin12345"
                 BBDDServidor="rds.${NombreProyecto}${NN}.es"
                 BBDD="MiBaseDatos"
                 NumServidor=$RANDOM
@@ -522,7 +522,7 @@ Resources:
                 #Modificar el fichero de configuración de la BBDD
                 #para que funcione la aplicación                                                                       
                 BBDDUsuario="admin"
-                BBDDPassword="admin1234"
+                BBDDPassword="admin12345"
                 BBDDServidor="rds.${NombreProyecto}${NN}.es"
                 BBDD="MiBaseDatos"
                 NumServidor=$RANDOM
