@@ -2,13 +2,12 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
     Plantilla CloudFormation para crear una base de datos RDS MySQL.
     Utiliza los datos de la VPC y subredes creadas en la pila anterior. Con !ImportValue
-            - 1 instancia EC2 Ubuntu Server 24.04 bastión con IPv4 elastica
+            - 1 instancia EC2 Ubuntu Server 24.04 bastión con IPv4 elastica (para cargar datos de prueba en la base de datos)
             - 1 instancia RDS MySQL 8.0
-            - 1 zona privada en Route53
             - 1 grupo de seguridad para la base de datos
             - 1 grupo de seguridad para el bastión Ubuntu
             - 1 grupo de subredes para la base de datos
-            - 1 registro DNS en la zona privada para la base de datos
+            - 1 registro DNS en la zona privada en ROUTE 53 para la base de datos (RDS.<proyecto>.es)
     Autor: Javier Teran Gonzalez
     Fecha creacion:     18/02/2025
     Version: 1.20
@@ -33,7 +32,6 @@ Resources:
           - IpProtocol: 'tcp'
             FromPort: '3306'
             ToPort: '3306'
-            #SourceSecurityGroupId: !ImportValue MiBastionSGID  # Referencia al grupo de seguridad de Ubuntu Bastion
             SourceSecurityGroupId: !Ref UbuntuBastionSecurityGroup  # Referencia al grupo de seguridad de Ubuntu Bastion
             Description: Permitir trafico desde el grupo de seguridad del ubuntu bastion
         Tags:
@@ -51,7 +49,6 @@ Resources:
   MiInstanciaBBDD:
       Type: 'AWS::RDS::DBInstance'
       Properties: 
-        #DBInstanceIdentifier: !ImportValue '${Proyecto}-bbdd'    # Nombre de la instancia de la base de datos
         DBInstanceIdentifier:  !Join [ '', [!ImportValue Proyecto, '-bbdd']]   # Nombre de la instancia de la base de datos
         DBInstanceClass: 'db.t3.micro'        # Clase de instancia de la base de datos (db.t3.micro es adecuada para pruebas)
         AllocatedStorage: '20'                # Almacenamiento en GB
@@ -72,8 +69,6 @@ Resources:
   UbuntuBastionSecurityGroup:
       Type: AWS::EC2::SecurityGroup
       Properties:
-          #GroupName: !Sub '${NombreProyecto}${NN}-usbastion-sg'
-          #GroupDescription: !Sub '${NombreProyecto}${NN}-usbastion-sg'
           GroupName:  !Join [ '', [!ImportValue Proyecto, '-usbastion-sg']]
           GroupDescription: !Join [ '', [!ImportValue Proyecto, '-usbastion-sg']]
 
@@ -92,7 +87,6 @@ Resources:
               Description: Permitir SSH IPv6
           Tags:
               - Key: Name
-#                Value: !Sub '${NombreProyecto}${NN}-usbastion-sg'
                 Value: !Join [ '', [!ImportValue Proyecto, '-usbastion-sg']]
   # Creacion de instancia Ubuntu
   UbuntuBastion:
@@ -102,10 +96,6 @@ Resources:
         InstanceType: t2.micro
         KeyName: vockey
         Monitoring: false
-#        SecurityGroupIds:
-#            - !Ref UbuntuBastionSecurityGroup
-        #SubnetId: !Ref SubredPublica1
-#        SubnetId: !ImportValue MiSubredPublica1ID # Subred publica1 de la VPC
         NetworkInterfaces:
             - DeviceIndex: 0
               AssociatePublicIpAddress: true
