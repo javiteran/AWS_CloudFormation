@@ -18,7 +18,7 @@ Parameters:
     NombreProyecto:
         Description: Nombre del proyecto.
         Type: String
-        Default: 'albp25'         
+        Default: 'albp'         
     NN:
         Type: Number
         Description: Numero de alumno.
