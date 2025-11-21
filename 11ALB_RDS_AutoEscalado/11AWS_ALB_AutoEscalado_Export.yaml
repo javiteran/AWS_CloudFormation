@@ -19,7 +19,7 @@ Parameters:
     NombreProyecto:
         Description: Nombre del proyecto.
         Type: String
-        Default: 'Balance25'         
+        Default: 'Balance'         
     NN:
         Type: Number
         Description: Numero de alumno.
@@ -28,7 +28,7 @@ Parameters:
         MinValue: 1
         MaxValue: 50
     AMIUbuntu:
-        Description: AMI ID Ubuntu Server 24.04.
+        Description: AMI ID Ubuntu Server 25.04.
         Type: String
         Default: 'ami-0ecb62995f68bb549'    
     AgenteEscuchaHttps:
@@ -166,6 +166,26 @@ Resources:
     #            - Key: Name
     #              Value: !Sub '${NombreProyecto}${NN}-eigw'
 
+    # EIP para NAT Gateway
+    NATGatewayEIP:
+        Type: AWS::EC2::EIP
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            Domain: vpc
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-nat-eip'
+
+    # NAT Gateway en subred pública
+    NATGateway:
+        Type: AWS::EC2::NatGateway
+        Properties:
+            AllocationId: !GetAtt NATGatewayEIP.AllocationId
+            SubnetId: !Ref SubredPublica1
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-nat-gw'
+
     # Tabla de rutas publica
     TablaRutasPublica:
         Type: AWS::EC2::RouteTable
@@ -220,6 +240,30 @@ Resources:
 
     # Rutas por defecto para las tabla de rutas privadas. Para IPv6 de solo salida.
     # Las instancias en subredes privadas pueden salir a internet pero no se puede acceder a ellas desde internet.
+    
+    # Rutas IPv4 para NAT Gateway
+    DefaultRouteIPv4Privada1:
+        Type: AWS::EC2::Route
+        Properties:
+            RouteTableId: !Ref TablaRutasPrivada1
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref NATGateway
+
+    DefaultRouteIPv4Privada2:
+        Type: AWS::EC2::Route
+        Properties:
+            RouteTableId: !Ref TablaRutasPrivada2
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref NATGateway
+
+    DefaultRouteIPv4Privada3:
+        Type: AWS::EC2::Route
+        Properties:
+            RouteTableId: !Ref TablaRutasPrivada3
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref NATGateway
+
+    # Rutas IPv6 de solo salida
     DefaultRouteIPv6SoloSalida0:
         Type: AWS::EC2::Route
         DependsOn: MiEgressOnlyInternetGateway
@@ -384,9 +428,15 @@ Resources:
           UserData:
             Fn::Base64: !Sub |
               #!/bin/bash
-              echo 'User data para Ubuntu Server'
-              apt-get update -y
-              apt-get upgrade -y
+                apt -y update
+                apt -y upgrade
+                apt install -y mysql-client 
+                git clone https://github.com/IESAlisal/24RetaCantabriaASIR2
+                cp ./24RetaCantabriaASIR2/data/datos.sql datos.sql
+                rm -rf ./24RetaCantabriaASIR2
+          # Descarga el repo y borra todo menos el fichero datos.sql
+          # Cuando el RDS esté operativo habrá que entrar y crear el contenido de la base de datos
+          # mysql -h rds.${NombreProyecto}${NN}.es -u ????? -p????? < datos.sql  
           Tags:
             - Key: Name
               Value: !Sub '${NombreProyecto}${NN}-us-bastion'
@@ -396,6 +446,8 @@ Resources:
                 VolumeSize: 20  # Tamaño del volumen en GB
                 VolumeType: gp3  # Tipo de volumen
                 DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
+
+    #Aunque no creo que sea necesaria esta ip elastica.
     UbuntuElasticIp:
         Type: AWS::EC2::EIP
         Properties:
@@ -404,146 +456,87 @@ Resources:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-us-ip'
 
-# Instancias en subredes privadas para los destinos del balanceador
-    UbuntuDestino1:
-        Type: AWS::EC2::Instance
+    # Lanzar plantilla para el grupo de autoescalado. Launch Template para Auto Scaling Group
+    MiLaunchTemplate:
+        Type: AWS::EC2::LaunchTemplate
         Properties:
-          ImageId: !Ref AMIUbuntu
-          InstanceType: t2.micro
-          KeyName: vockey
-          Monitoring: false
-          SecurityGroupIds:
-              - !Ref UbuntuDestinosSecurityGroup 
-          SubnetId: !Ref SubredPrivada1
-          UserData:
-            Fn::Base64: !Sub |
-                #!/bin/bash
-                apt -y update
-                apt -y upgrade
-                apt install -y apache2 php php-mysql mysql-client php-curl
-                cd /var/www/html/
-                rm index.html
-                git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
-                cp vars-sample.php vars.php
-                service apache2 restart
+            LaunchTemplateName: !Sub '${NombreProyecto}${NN}-launch-template'
+            LaunchTemplateData:
+                ImageId: !Ref AMIUbuntu
+                InstanceType: t2.micro
+                KeyName: vockey
+                Monitoring:
+                    Enabled: false
+                SecurityGroupIds:
+                    - !Ref UbuntuDestinosSecurityGroup
+                UserData:
+                    Fn::Base64: !Sub |
+                        #!/bin/bash
+                        apt -y update
+                        apt -y upgrade
+                        apt install -y apache2 php php-mysql mysql-client php-curl
+                        cd /var/www/html/
+                        rm index.html
+                        git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
+                        cp vars-sample.php vars.php
+                        service apache2 restart
 
-                #Modificar el fichero de configuración de la BBDD
-                #para que funcione la aplicación                                                                       
-                BBDDUsuario="admin"
-                BBDDPassword="admin12345"
-                BBDDServidor="rds.${NombreProyecto}${NN}.es"
-                BBDD="MiBaseDatos"
-                NumServidor=$RANDOM
+                        #Modificar el fichero de configuración de la BBDD
+                        #para que funcione la aplicación                                                                       
+                        BBDDUsuario="admin"
+                        BBDDPassword="admin12345"
+                        BBDDServidor="rds.${NombreProyecto}${NN}.es"
+                        BBDD="MiBaseDatos"
+                        NumServidor=$RANDOM
 
-                # Cambiar el fichero de constantes por los datos correctos
-                sed -i "s/localhost/$BBDDServidor/g"    /var/www/html/vars.php
-                sed -i "s/user/$BBDDUsuario/g"     	    /var/www/html/vars.php
-                sed -i "s/usuariopass/$BBDDPassword/g"  /var/www/html/vars.php
-                sed -i "s/libros/$BBDD/g"               /var/www/html/vars.php
-                sed -i "s/1Uno/$NumServidor/g"          /var/www/html/vars.php
-          Tags:
-            - Key: Name
-              Value: !Sub '${NombreProyecto}${NN}-us1'
-          BlockDeviceMappings:
-            - DeviceName: /dev/sda1  # El volumen raíz de la instancia
-              Ebs:
-                VolumeSize: 20  # Tamaño del volumen en GB
-                VolumeType: gp3  # Tipo de volumen
-                DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
+                        # Cambiar el fichero de constantes por los datos correctos
+                        sed -i "s/localhost/$BBDDServidor/g"    /var/www/html/vars.php
+                        sed -i "s/user/$BBDDUsuario/g"     	    /var/www/html/vars.php
+                        sed -i "s/usuariopass/$BBDDPassword/g"  /var/www/html/vars.php
+                        sed -i "s/libros/$BBDD/g"               /var/www/html/vars.php
+                        sed -i "s/1Uno/$NumServidor/g"          /var/www/html/vars.php
+                TagSpecifications:
+                    - ResourceType: instance
+                      Tags:
+                          - Key: Name
+                            Value: !Sub '${NombreProyecto}${NN}-asg-instance'
+                          - Key: Proyecto
+                            Value: !Sub '${NombreProyecto}${NN}'
+                BlockDeviceMappings:
+                    - DeviceName: /dev/sda1
+                      Ebs:
+                          VolumeSize: 20
+                          VolumeType: gp3
+                          DeleteOnTermination: true
 
-    UbuntuDestino2:
-        Type: AWS::EC2::Instance
+    # Grupo de autoescalado. Auto Scaling Group
+    MiAutoScalingGroup:
+        Type: AWS::AutoScaling::AutoScalingGroup
         Properties:
-          ImageId: !Ref AMIUbuntu
-          InstanceType: t2.micro
-          KeyName: vockey
-          Monitoring: false
-          SecurityGroupIds:
-              - !Ref UbuntuDestinosSecurityGroup 
-          SubnetId: !Ref SubredPrivada2
-          UserData:
-            Fn::Base64: !Sub |
-                #!/bin/bash
-                apt -y update
-                apt -y upgrade
-                apt install -y apache2 php php-mysql mysql-client php-curl
-                cd /var/www/html/
-                rm index.html
-                git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
-                cp vars-sample.php vars.php
-                service apache2 restart
+            AutoScalingGroupName: !Sub '${NombreProyecto}${NN}-asg'
+            LaunchTemplate:
+                LaunchTemplateId: !Ref MiLaunchTemplate
+                Version: !GetAtt MiLaunchTemplate.LatestVersionNumber
+            MinSize: 2
+            MaxSize: 5
+            DesiredCapacity: 3
+            VPCZoneIdentifier:
+                - !Ref SubredPrivada1
+                - !Ref SubredPrivada2
+                - !Ref SubredPrivada3
+            HealthCheckType: ELB
+            HealthCheckGracePeriod: 300
+            TargetGroupARNs:
+                - !Ref MiGrupoDestinos
+            Tags:
+                - Key: Name
+                  Value: !Sub '${NombreProyecto}${NN}-asg'
+                  PropagateAtLaunch: false
+                - Key: Proyecto
+                  Value: !Sub '${NombreProyecto}${NN}'
+                  PropagateAtLaunch: true
 
-                #Modificar el fichero de configuración de la BBDD
-                #para que funcione la aplicación                                                                       
-                BBDDUsuario="admin"
-                BBDDPassword="admin12345"
-                BBDDServidor="rds.${NombreProyecto}${NN}.es"
-                BBDD="MiBaseDatos"
-                NumServidor=$RANDOM
-
-                # Cambiar el fichero de constantes por los datos correctos
-                sed -i "s/localhost/$BBDDServidor/g"    /var/www/html/vars.php
-                sed -i "s/user/$BBDDUsuario/g"     	    /var/www/html/vars.php
-                sed -i "s/usuariopass/$BBDDPassword/g"  /var/www/html/vars.php
-                sed -i "s/libros/$BBDD/g"               /var/www/html/vars.php
-                sed -i "s/1Uno/$NumServidor/g"          /var/www/html/vars.php
-          Tags:
-            - Key: Name
-              Value: !Sub '${NombreProyecto}${NN}-us2'
-          BlockDeviceMappings:
-            - DeviceName: /dev/sda1  # El volumen raíz de la instancia
-              Ebs:
-                VolumeSize: 20  # Tamaño del volumen en GB
-                VolumeType: gp3  # Tipo de volumen
-                DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
-
-    UbuntuDestino3:
-        Type: AWS::EC2::Instance
-        Properties:
-          ImageId: !Ref AMIUbuntu
-          InstanceType: t2.micro
-          KeyName: vockey
-          Monitoring: false
-          SecurityGroupIds:
-              - !Ref UbuntuDestinosSecurityGroup 
-          SubnetId: !Ref SubredPrivada3
-          UserData:
-            Fn::Base64: !Sub |
-                #!/bin/bash
-                apt -y update
-                apt -y upgrade
-                apt install -y apache2 php php-mysql mysql-client php-curl
-                cd /var/www/html/
-                rm index.html
-                git clone https://github.com/IESAlisal/24RetaCantabriaASIR2 .
-                cp vars-sample.php vars.php
-                service apache2 restart
-
-                #Modificar el fichero de configuración de la BBDD
-                #para que funcione la aplicación                                                                       
-                BBDDUsuario="admin"
-                BBDDPassword="admin12345"
-                BBDDServidor="rds.${NombreProyecto}${NN}.es"
-                BBDD="MiBaseDatos"
-                NumServidor=$RANDOM
-
-                # Cambiar el fichero de constantes por los datos correctos
-                sed -i "s/localhost/$BBDDServidor/g"    /var/www/html/vars.php
-                sed -i "s/user/$BBDDUsuario/g"     	    /var/www/html/vars.php
-                sed -i "s/usuariopass/$BBDDPassword/g"  /var/www/html/vars.php
-                sed -i "s/libros/$BBDD/g"               /var/www/html/vars.php
-                sed -i "s/1Uno/$NumServidor/g"          /var/www/html/vars.php
-          Tags:
-            - Key: Name
-              Value: !Sub '${NombreProyecto}${NN}-us3'
-          BlockDeviceMappings:
-            - DeviceName: /dev/sda1  # El volumen raíz de la instancia
-              Ebs:
-                VolumeSize: 20  # Tamaño del volumen en GB
-                VolumeType: gp3  # Tipo de volumen
-                DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
-
-    # Balanceador de carga
+    # Balanceador de carga. Load Balancer
     MiALB:
         Type: AWS::ElasticLoadBalancingV2::LoadBalancer
         Properties:
@@ -580,10 +573,11 @@ Resources:
             UnhealthyThresholdCount: 2
             Matcher:
                 HttpCode: 200
-            Targets:
-                - Id: !Ref UbuntuDestino1
-                - Id: !Ref UbuntuDestino2
-                - Id: !Ref UbuntuDestino3
+            # Los destinos serán gestionados por el Auto Scaling Group
+            # Targets:
+            #     - Id: !Ref UbuntuDestino1
+            #     - Id: !Ref UbuntuDestino2
+            #     - Id: !Ref UbuntuDestino3
             Tags:
                 - Key: Name
                   Value: !Sub '${NombreProyecto}${NN}-tg'
@@ -721,3 +715,9 @@ Outputs:
         Description: URL del balanceador con https
         Condition: UsarHttps
         Value: !Sub 'https://${MiALB.DNSName}'
+    AutoScalingGroupName:
+        Description: Nombre del Auto Scaling Group
+        Value: !Ref MiAutoScalingGroup
+    LaunchTemplateId:
+        Description: ID de la Launch Template
+        Value: !Ref MiLaunchTemplate
