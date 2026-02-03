@@ -14,7 +14,7 @@ Parameters:
   WordpressHostHeader:
     Description: Nombre de dominio DNS para enrutar trafico a Wordpress
     Type: String
-    Default: wp1.alisal01.com.es
+    Default: ???.alisal01.com.es
 
 Resources:
   # =============================================
@@ -75,7 +75,7 @@ Resources:
       AssignIpv6AddressOnCreation: true
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-Public-Subnet-AZ1
+          Value: !Sub ${AWS::StackName}-Subred-Publica-AZ1
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -89,7 +89,7 @@ Resources:
       AssignIpv6AddressOnCreation: true
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-Public-Subnet-AZ2
+          Value: !Sub ${AWS::StackName}-Subred-Publica-AZ2
 
   PublicSubnet3:
     Type: AWS::EC2::Subnet
@@ -103,7 +103,7 @@ Resources:
       AssignIpv6AddressOnCreation: true
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-Public-Subnet-AZ3
+          Value: !Sub ${AWS::StackName}-Subred-Publica-AZ3
 
   # =============================================
   # SUBREDES PRIVADAS
@@ -120,7 +120,7 @@ Resources:
       AssignIpv6AddressOnCreation: true
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-Private-Subnet-AZ1
+          Value: !Sub ${AWS::StackName}-Subred-Privada-AZ1
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -134,7 +134,7 @@ Resources:
       AssignIpv6AddressOnCreation: true
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-Private-Subnet-AZ2
+          Value: !Sub ${AWS::StackName}-Subred-Privada-AZ2
 
   PrivateSubnet3:
     Type: AWS::EC2::Subnet
@@ -148,7 +148,7 @@ Resources:
       AssignIpv6AddressOnCreation: true
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-Private-Subnet-AZ3
+          Value: !Sub ${AWS::StackName}-Subred-Privada-AZ3
 
   # =============================================
   # NAT GATEWAY (Regional - una sola para todas las subredes privadas)
@@ -166,7 +166,9 @@ Resources:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NatGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
+      VpcId: !Ref VPC 
+      AvailabilityMode: regional
+      #SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-NAT-Gateway
@@ -223,6 +225,9 @@ Resources:
     Type: AWS::EC2::EgressOnlyInternetGateway
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-EIGW_IPv6
 
   # =============================================
   # TABLA DE ENRUTAMIENTO PRIVADA
@@ -242,7 +247,7 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway
 
-    DefaultPrivateRouteIPv6:
+  DefaultPrivateRouteIPv6:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PrivateRouteTable
@@ -292,16 +297,10 @@ Resources:
           ToPort: 2049
           SourceSecurityGroupId: !Ref WordpressSecurityGroup
           Description: Permitir trafico NFS desde Wordpress
-        - IpProtocol: tcp
-          FromPort: 2049
-          ToPort: 2049
-          SourceSecurityGroupId: !Ref NextCloudSecurityGroup
-          Description: Permitir trafico NFS desde NextCloud
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-EFS-SG
 
-Conditions:
   # Un punto de montaje EFS por cada subred privada
   EFSMountTarget1:
     Type: AWS::EFS::MountTarget
@@ -328,14 +327,46 @@ Conditions:
         - !Ref EFSSecurityGroup
 
   # =============================================
-  # GRUPOS DE SEGURIDAD - HTTP
+  # GRUPOS DE SEGURIDAD - HTTP para instancia plantilla
   # =============================================
   WordpressSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: ALBSecurityGroup
     Properties:
       GroupName: !Sub ${AWS::StackName}-Wordpress-SG
       GroupDescription: Grupo de seguridad para Wordpress - Solo HTTP
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Permitir trafico HTTP desde cualquier origen IPv4   
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIpv6: ::/0
+          Description: Permitir trafico HTTP desde cualquier origen IPv6
+
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Permitir todo el trafico de salida IPv4
+        - IpProtocol: -1
+          CidrIpv6: ::/0
+          Description: Permitir todo el trafico de salida IPv6
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Wordpress-SG
+
+  # =============================================
+  # GRUPO DE SEGURIDAD - HTTP para los Wordpress del grupo de autoescalado
+  # =============================================
+  
+  AutoescaladoSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-Autoescalado-SG
+      GroupDescription: Grupo de seguridad para los Wordpress del autoescalado - Solo HTTP
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -352,7 +383,7 @@ Conditions:
           Description: Permitir todo el trafico de salida IPv6
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-Wordpress-SG
+          Value: !Sub ${AWS::StackName}-Autoescalado-SG
 
   # =============================================
   # INSTANCIA EC2 Plantilla
@@ -363,7 +394,7 @@ Conditions:
     Properties:
       InstanceType: t3.micro
       ImageId: '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'
-      SubnetId: !Ref PrivateSubnet1
+      SubnetId: !Ref PublicSubnet2
       SecurityGroupIds:
         - !Ref WordpressSecurityGroup
       KeyName: vockey
@@ -486,6 +517,9 @@ Conditions:
           PHPEOF
 
           echo "Archivo instance.php creado correctamente"
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-plantilla-Wordpress       
   # =============================================
   # TARGET GROUPS
   # =============================================
@@ -628,6 +662,10 @@ Outputs:
     Description: ID de la instancia Wordpress
     Value: !Ref WordpressInstance
 
+  IPWordpress:
+    Description: IP pública de la instancia Wordpress
+    Value: !GetAtt WordpressInstance.PublicIp
+  
   URLWordpress:
     Description: URL del Wordpress
     Value: !Sub http://${WordpressHostHeader}
