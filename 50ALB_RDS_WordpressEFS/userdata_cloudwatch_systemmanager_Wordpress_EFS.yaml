@@ -1,0 +1,641 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudFormation template para crear una VPC con 3 subredes publicas, 
+  3 subredes privadas, Internet Gateway y NAT Gateway regional.
+
+Parameters:
+  VpcCIDR:
+    Description: Rango CIDR para la VPC (minimo /21 para crear 6 subredes /24)
+    Type: String
+    Default: 10.113.0.0/16
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: Debe ser un CIDR valido (ej. 10.0.0.0/16)
+
+  WordpressHostHeader:
+    Description: Nombre de dominio DNS para enrutar trafico a Wordpress
+    Type: String
+    Default: wp1.alisal01.com.es
+
+Resources:
+  # =============================================
+  # VPC
+  # =============================================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC
+
+  # Bloque CIDR IPv6 asignado por Amazon
+  VPCIPv6CidrBlock:
+    Type: AWS::EC2::VPCCidrBlock
+    Properties:
+      VpcId: !Ref VPC
+      AmazonProvidedIpv6CidrBlock: true
+
+  # =============================================
+  # INTERNET GATEWAY
+  # =============================================
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-IGW
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # =============================================
+  # SUBREDES PUBLICAS
+  # Las subredes se calculan automaticamente usando Fn::Cidr
+  # Subred 0: Primera subred publica (/24)
+  # Subred 1: Segunda subred publica (/24)
+  # Subred 2: Tercera subred publica (/24)
+  # Subred 3: Primera subred privada (/24)
+  # Subred 4: Segunda subred privada (/24)
+  # Subred 5: Tercera subred privada (/24)
+  # =============================================
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: VPCIPv6CidrBlock
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCIDR, 6, 8]]
+      Ipv6CidrBlock: !Select [0, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 6, 64]]
+      MapPublicIpOnLaunch: true
+      AssignIpv6AddressOnCreation: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Subnet-AZ1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: VPCIPv6CidrBlock
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCIDR, 6, 8]]
+      Ipv6CidrBlock: !Select [1, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 6, 64]]
+      MapPublicIpOnLaunch: true
+      AssignIpv6AddressOnCreation: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Subnet-AZ2
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    DependsOn: VPCIPv6CidrBlock
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCIDR, 6, 8]]
+      Ipv6CidrBlock: !Select [2, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 6, 64]]
+      MapPublicIpOnLaunch: true
+      AssignIpv6AddressOnCreation: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Subnet-AZ3
+
+  # =============================================
+  # SUBREDES PRIVADAS
+  # =============================================
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: VPCIPv6CidrBlock
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [3, !Cidr [!Ref VpcCIDR, 6, 8]]
+      Ipv6CidrBlock: !Select [3, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 6, 64]]
+      MapPublicIpOnLaunch: false
+      AssignIpv6AddressOnCreation: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-Subnet-AZ1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: VPCIPv6CidrBlock
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [4, !Cidr [!Ref VpcCIDR, 6, 8]]
+      Ipv6CidrBlock: !Select [4, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 6, 64]]
+      MapPublicIpOnLaunch: false
+      AssignIpv6AddressOnCreation: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-Subnet-AZ2
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    DependsOn: VPCIPv6CidrBlock
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: !Select [5, !Cidr [!Ref VpcCIDR, 6, 8]]
+      Ipv6CidrBlock: !Select [5, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 6, 64]]
+      MapPublicIpOnLaunch: false
+      AssignIpv6AddressOnCreation: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-Subnet-AZ3
+
+  # =============================================
+  # NAT GATEWAY (Regional - una sola para todas las subredes privadas)
+  # =============================================
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-NAT-EIP
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-NAT-Gateway
+
+  # =============================================
+  # TABLA DE ENRUTAMIENTO PUBLICA
+  # =============================================
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  DefaultPublicRouteIPv6:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationIpv6CidrBlock: ::/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet3
+
+  # =============================================
+  # Egress-Only Internet Gateway para trafico IPv6 saliente desde subredes privadas
+  # =============================================
+  EgressOnlyInternetGateway:
+    Type: AWS::EC2::EgressOnlyInternetGateway
+    Properties:
+      VpcId: !Ref VPC
+
+  # =============================================
+  # TABLA DE ENRUTAMIENTO PRIVADA
+  # =============================================
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-Routes
+
+  DefaultPrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+    DefaultPrivateRouteIPv6:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationIpv6CidrBlock: ::/0
+      EgressOnlyInternetGatewayId: !Ref EgressOnlyInternetGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
+
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet3
+
+  # =============================================
+  # ELASTIC FILE SYSTEM (EFS). Sistema de ficheros compartidos NFS.
+  # =============================================
+  EFSFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-EFS
+
+  EFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-EFS-SG
+      GroupDescription: Grupo de seguridad para EFS - NFS
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref WordpressSecurityGroup
+          Description: Permitir trafico NFS desde Wordpress
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref NextCloudSecurityGroup
+          Description: Permitir trafico NFS desde NextCloud
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-EFS-SG
+
+Conditions:
+  # Un punto de montaje EFS por cada subred privada
+  EFSMountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  EFSMountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SubnetId: !Ref PrivateSubnet2
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  EFSMountTarget3:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SubnetId: !Ref PrivateSubnet3
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  # =============================================
+  # GRUPOS DE SEGURIDAD - HTTP
+  # =============================================
+  WordpressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: ALBSecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-Wordpress-SG
+      GroupDescription: Grupo de seguridad para Wordpress - Solo HTTP
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Permitir trafico HTTP solo desde el ALB
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Permitir todo el trafico de salida IPv4
+        - IpProtocol: -1
+          CidrIpv6: ::/0
+          Description: Permitir todo el trafico de salida IPv6
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Wordpress-SG
+
+  # =============================================
+  # INSTANCIA EC2 Plantilla
+  # =============================================
+  WordpressInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: DefaultPrivateRoute
+    Properties:
+      InstanceType: t3.micro
+      ImageId: '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref WordpressSecurityGroup
+      KeyName: vockey
+      IamInstanceProfile: LabInstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          
+          apt-get update -y
+
+          # Instalar SSM Agent en Ubuntu
+          snap install amazon-ssm-agent --classic
+          systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+          systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
+
+          apt-get install apache2 -y
+          apt-get install php php-common libapache2-mod-php php-bz2 php-gd php-mysql \
+          php-curl php-mbstring php-imagick php-zip php-common php-curl php-xml \
+          php-json php-bcmath php-xml php-intl php-gmp zip unzip wget -y
+          a2enmod env rewrite dir mime headers setenvif ssl
+          systemctl restart apache2
+          systemctl enable apache2
+          rm /var/www/html/index.html
+
+
+          #Instalar NFS, conectar a un volumen EFS y modificar el fstab para que se monte al iniciar
+          #El volumen EFS debe estar creado previamente
+          #El Volumen EFS debe tener un grupo de seguridad que permita el trafico NFS (puerto 2049) desde el grupo de seguridad de la instancia EC2
+          #El Volumen EFS debe estar en la misma region que la instancia EC2
+          sudo apt-get install -y nfs-common binutils build-essential
+          sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com:/ /var/www/html
+          systemctl daemon-reload
+          echo ${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com:/ /var/www/html nfs4 nfsvers=4.1,_netdev 0 0 >> /etc/fstab
+
+
+          #Descarga y descomprime la ultima version del wordpress
+          #Se necesita un RDS para la bbdd
+          cd /home/ubuntu
+          wget https://wordpress.org/latest.zip -O latest.zip
+          unzip latest.zip
+          cd wordpress
+          cp -R . /var/www/html
+          cd ..
+          rm latest.zip
+          rm -R wordpress
+          chown -R www-data:www-data /var/www/html/
+
+          # Configurar CloudWatch Logs
+          LOG_GROUP="/ec2/ubuntu24"
+          REGION="us-east-1"
+          # Instalar CloudWatch Agent  INICIO #############################
+          # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/download-CloudWatch-Agent-on-EC2-Instance-commandline-first.html
+          wget https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb           
+          dpkg -i amazon-cloudwatch-agent.deb
+          
+          # Crear configuración del agente
+          cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
+          {
+            "agent": {
+              "region": "$REGION"
+            },
+            "logs": {
+              "logs_collected": {
+                "files": {
+                  "collect_list": [
+                    {
+                      "file_path": "/var/log/syslog",
+                      "log_group_name": "$LOG_GROUP",
+                      "log_stream_name": "{instance_id}",
+                      "timezone": "UTC"
+                    },
+                    {
+                      "file_path": "/var/log/apache2/access.log",
+                      "log_group_name": "$LOG_GROUP",
+                      "log_stream_name": "{instance_id}-apache-access",
+                      "timezone": "UTC"
+                    },
+                    {
+                      "file_path": "/var/log/apache2/error.log",
+                      "log_group_name": "$LOG_GROUP",
+                      "log_stream_name": "{instance_id}-apache-error",
+                      "timezone": "UTC"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+          EOF
+          
+          # Iniciar el agente
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+            -a fetch-config \
+            -m ec2 \
+            -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+            -s
+          
+          # Habilitar el servicio
+          systemctl enable amazon-cloudwatch-agent
+          systemctl restart amazon-cloudwatch-agent
+
+          # IMPORTANTE
+          # Para que funcione el agente de CloudWatch debes tener conectividad a los endpoints de CloudWatch Logs
+          # Si estás en la red pública con IGW no hay problema
+          # Si estás en una VPC privada con NAT-GATEWAY tampoco hay problema
+          # Si estás en una VPC privada sin salida a Internet debes usar un ENDPOINT VPC
+          # Si sólo usas IPv6 sin NAT-GATEWAY debes abrir el puerto https ::0 en el grupo de seguridad entrante (y saliente si tienes reglas restrictivas)
+          # Parece que da problemas con la resolución DNS si no tienes IPv4
+          # Debes usar un ENDPOINT IPv6 para CloudWatch en tu región (AWS Services y buscar logs) 
+          # Instalar CloudWatch Agent  FIN #############################
+
+
+          #Mostrar informacion del ID de la instancia en un archivo PHP
+          cat > /var/www/html/instance.php <<'PHPEOF'
+          <?php
+          $token = trim(shell_exec('curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"'));
+          echo trim(shell_exec("curl -s -H 'X-aws-ec2-metadata-token: $token' http://169.254.169.254/latest/meta-data/instance-id"));
+          ?>
+          PHPEOF
+
+          echo "Archivo instance.php creado correctamente"
+  # =============================================
+  # TARGET GROUPS
+  # =============================================
+  WordpressTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${AWS::StackName}-Wordpress-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Matcher:
+        HttpCode: 200-399
+      Targets:
+        - Id: !Ref WordpressInstance
+          Port: 80
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Wordpress-TG
+
+  # =============================================
+  # APPLICATION LOAD BALANCER
+  # =============================================
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-ALB-SG
+      GroupDescription: Grupo de seguridad para el Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Permitir trafico HTTP desde cualquier origen IPv4
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIpv6: ::/0
+          Description: Permitir trafico HTTP desde cualquier origen IPv6
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Permitir trafico HTTPS desde cualquier origen IPv4
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIpv6: ::/0
+          Description: Permitir trafico HTTPS desde cualquier origen IPv6
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Permitir todo el trafico de salida IPv4
+        - IpProtocol: -1
+          CidrIpv6: ::/0
+          Description: Permitir todo el trafico de salida IPv6
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-ALB-SG
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${AWS::StackName}-ALB
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: dualstack
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3        
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-ALB
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WordpressTargetGroup
+
+# =============================================
+# Grupo de seguridad RDS/MySQL para permitir acceso desde Wordpress
+# =============================================
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-RDS-SG
+      GroupDescription: Grupo de seguridad para RDS/MySQL - Acceso desde Wordpress
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WordpressSecurityGroup
+          Description: Permitir trafico MySQL desde Wordpress
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Permitir todo el trafico de salida IPv4
+        - IpProtocol: -1
+          CidrIpv6: ::/0
+          Description: Permitir todo el trafico de salida IPv6
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-RDS-SG
+
+# =============================================
+# OUTPUTS
+# =============================================
+Outputs:
+  VPCCidr:
+    Description: CIDR de la VPC
+    Value: !GetAtt VPC.CidrBlock
+
+  ApplicationLoadBalancerURL:
+    Description: URL del Application Load Balancer
+    Value: !Sub http://${ApplicationLoadBalancer.DNSName}
+
+  DNSRegistroWordpress:
+    Description: Registro DNS para Wordpress
+    Value: !Sub "registro DNS ${WordpressHostHeader}  CNAME  ${ApplicationLoadBalancer.DNSName}"
+
+  InstanceIdWordpress:
+    Description: ID de la instancia Wordpress
+    Value: !Ref WordpressInstance
+
+  URLWordpress:
+    Description: URL del Wordpress
+    Value: !Sub http://${WordpressHostHeader}
+    
+  EFSFileSystemId:
+    Description: ID del sistema de archivos EFS
+    Value: !Ref EFSFileSystem
+
+  EFSFileSystemDNS:
+    Description: DNS del sistema de archivos EFS para montar
+    Value: !Sub ${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com
