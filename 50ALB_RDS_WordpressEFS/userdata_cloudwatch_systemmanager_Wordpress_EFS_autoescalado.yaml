@@ -310,7 +310,7 @@ Resources:
           FromPort: 2049
           ToPort: 2049
           SourceSecurityGroupId: !Ref AutoescaladoSecurityGroup
-          Description: Permitir trafico NFS desde Wordpress          
+          Description: Permitir trafico NFS desde Wordpress
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-EFS-SG
@@ -534,6 +534,202 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-plantilla-Wordpress       
+
+  # =============================================
+  # LAUNCH TEMPLATE para Autoescalado
+  # =============================================
+  WordpressLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-Wordpress-LT
+      VersionDescription: Plantilla de lanzamiento para Wordpress con EFS
+      LaunchTemplateData:
+        ImageId: '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'
+        InstanceType: t3.micro
+        KeyName: vockey
+        IamInstanceProfile:
+          Name: LabInstanceProfile
+        SecurityGroupIds:
+          - !Ref AutoescaladoSecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -e
+            
+            apt-get update -y
+
+            # Instalar SSM Agent en Ubuntu
+            snap install amazon-ssm-agent --classic
+            systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+            systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
+
+            apt-get install apache2 -y
+            apt-get install php php-common libapache2-mod-php php-bz2 php-gd php-mysql \
+            php-curl php-mbstring php-imagick php-zip php-common php-curl php-xml \
+            php-json php-bcmath php-xml php-intl php-gmp zip unzip wget -y
+            a2enmod env rewrite dir mime headers setenvif ssl
+            systemctl restart apache2
+            systemctl enable apache2
+
+            # Instalar NFS
+            sudo apt-get install -y nfs-common binutils build-essential
+            sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com:/ /var/www/html
+            systemctl daemon-reload
+            echo ${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com:/ /var/www/html nfs4 nfsvers=4.1,_netdev 0 0 >> /etc/fstab
+
+            # Configurar CloudWatch Logs
+            LOG_GROUP="/ec2/ubuntu24"
+            REGION="${AWS::Region}"
+            # Instalar CloudWatch Agent
+            wget https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb           
+            dpkg -i amazon-cloudwatch-agent.deb
+            
+            # Crear configuración del agente
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
+            {
+              "agent": {
+                "region": "$REGION"
+              },
+              "logs": {
+                "logs_collected": {
+                  "files": {
+                    "collect_list": [
+                      {
+                        "file_path": "/var/log/syslog",
+                        "log_group_name": "$LOG_GROUP",
+                        "log_stream_name": "{instance_id}",
+                        "timezone": "UTC"
+                      },
+                      {
+                        "file_path": "/var/log/apache2/access.log",
+                        "log_group_name": "$LOG_GROUP",
+                        "log_stream_name": "{instance_id}-apache-access",
+                        "timezone": "UTC"
+                      },
+                      {
+                        "file_path": "/var/log/apache2/error.log",
+                        "log_group_name": "$LOG_GROUP",
+                        "log_stream_name": "{instance_id}-apache-error",
+                        "timezone": "UTC"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            EOF
+            
+            # Iniciar el agente
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+              -a fetch-config \
+              -m ec2 \
+              -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+              -s
+            
+            # Habilitar el servicio
+            systemctl enable amazon-cloudwatch-agent
+            systemctl restart amazon-cloudwatch-agent
+
+            # Mostrar información del ID de la instancia
+            cat > /var/www/html/instance.php <<'PHPEOF'
+            <?php
+            $token = trim(shell_exec('curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"'));
+            echo trim(shell_exec("curl -s -H 'X-aws-ec2-metadata-token: $token' http://169.254.169.254/latest/meta-data/instance-id"));
+            ?>
+            PHPEOF
+
+            echo "Wordpress configurado en instancia de autoescalado"
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub ${AWS::StackName}-Wordpress-ASG
+
+  # =============================================
+  # AUTO SCALING GROUP
+  # =============================================
+  WordpressAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: DefaultPrivateRoute
+    Properties:
+      AutoScalingGroupName: !Sub ${AWS::StackName}-Wordpress-ASG
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WordpressLaunchTemplate
+        Version: !GetAtt WordpressLaunchTemplate.LatestVersionNumber
+      MinSize: 3
+      MaxSize: 4
+      DesiredCapacity: 3
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      TargetGroupARNs:
+        - !Ref WordpressTargetGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Wordpress-ASG-Instance
+          PropagateAtLaunch: true
+
+  # =============================================
+  # SCALING POLICIES
+  # =============================================
+  WordpressScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WordpressAutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: 1
+
+  WordpressScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WordpressAutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: -1
+
+  # =============================================
+  # CLOUDWATCH ALARMS para autoescalado
+  # =============================================
+  WordpressCPUHighAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-Wordpress-CPU-High
+      AlarmDescription: Alarma para escalar hacia arriba cuando CPU > 70%
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WordpressAutoScalingGroup
+      AlarmActions:
+        - !Ref WordpressScaleUpPolicy
+
+  WordpressCPULowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-Wordpress-CPU-Low
+      AlarmDescription: Alarma para escalar hacia abajo cuando CPU < 30%
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 30
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WordpressAutoScalingGroup
+      AlarmActions:
+        - !Ref WordpressScaleDownPolicy
+
   # =============================================
   # TARGET GROUPS
   # =============================================
@@ -554,9 +750,6 @@ Resources:
       UnhealthyThresholdCount: 5
       Matcher:
         HttpCode: 200-399
-      Targets:
-        - Id: !Ref WordpressInstance
-          Port: 80
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-Wordpress-TG
