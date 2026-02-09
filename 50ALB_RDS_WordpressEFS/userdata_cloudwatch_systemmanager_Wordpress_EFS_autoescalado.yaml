@@ -1,7 +1,19 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  CloudFormation template para crear una VPC con 3 subredes publicas, 
-  3 subredes privadas, Internet Gateway y NAT Gateway regional.
+  - CloudFormation template para crear una VPC con 3 subredes publicas, 3 subredes privadas
+  - IGW Internet Gateway IPv4 subredes públicas
+  - NAT Gateway regional, EIGW Internet Gateway IPv6 para subredes privadas
+  - Tablas de enrutamiento
+  - EFS con un punto de montaje en cada subred privada
+  - Grupos de seguridad 
+  - Una instancia EC2 plantilla con Apache, PHP, NFS y el agente de CloudWatch y System Manager
+  - Un Launch Template con user data para el autoescalado
+  - Un AutoScaling Group, usando el Launch Template
+  - Políticas de escalado y Alarmas de CloudWatch
+  - Un Target Group para el AutoScaling Group
+  - ALB público que enrute tráfico HTTP/HTTPS
+  - RDS/MySQL en otra plantilla, con un grupo de seguridad que permita el acceso desde el grupo de seguridad de las instancias EC2
+
 
 Parameters:
   VpcCIDR:
@@ -22,8 +34,8 @@ Parameters:
     NoEcho: true
     MinLength: 8
     MaxLength: 41
-    AllowedPattern: ^[a-zA-Z0-9@#%&$?¿_:]*$
-    ConstraintDescription: Debe contener letras, numeros y caracteres especiales (@#%&$?¿_:), minimo 8 caracteres
+    #AllowedPattern: ^[a-zA-Z0-9@#%&$?¿_:]*$
+    #ConstraintDescription: Debe contener letras, numeros y caracteres especiales (@#%&$?¿_:), minimo 8 caracteres
 
 Resources:
   # =============================================
@@ -909,46 +921,39 @@ Resources:
 # OUTPUTS
 # =============================================
 Outputs:
-  VPCCidr:
-    Description: CIDR de la VPC
-    Value: !GetAtt VPC.CidrBlock
-
-  ApplicationLoadBalancerURL:
+  ALB_URL:
     Description: URL del Application Load Balancer
     Value: !Sub http://${ApplicationLoadBalancer.DNSName}
 
-  DNSRegistroWordpress:
-    Description: Registro DNS para Wordpress
-    Value: !Sub "registro DNS ${WordpressHostHeader}  CNAME  ${ApplicationLoadBalancer.DNSName}"
-
-  InstanceIdWordpress:
-    Description: ID de la instancia Wordpress
-    Value: !Ref WordpressInstance
-
-  IPWordpress:
-    Description: IP pública de la instancia Wordpress
-    Value: !GetAtt WordpressInstance.PublicIp
-  
-  URLWordpress:
-    Description: URL del Wordpress
+  ALB_URL_Correcta:
+    Description: URL del Application Load Balancer con Registro DNS
     Value: !Sub http://${WordpressHostHeader}
+
+
+  DNS_Registro_Wordpress:
+    Description: Registro DNS que ha que crear para Wordpress
+    Value: !Sub "registro DNS ${WordpressHostHeader}  CNAME  ${ApplicationLoadBalancer.DNSName}"
     
-  EFSFileSystemId:
+  EFS_FileSystemId:
     Description: ID del sistema de archivos EFS
     Value: !Ref EFSFileSystem
 
-  EFSFileSystemDNS:
+  EFS_FileSystemDNS:
     Description: DNS del sistema de archivos EFS para montar
     Value: !Sub ${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com
 
-  RDSEndpoint:
+  RDS_Endpoint:
     Description: Endpoint de la instancia RDS MySQL
     Value: !GetAtt RDSMySQLInstance.Endpoint.Address
 
-  RDSDatabaseName:
+  RDS_DatabaseName:
     Description: Nombre de la base de datos
     Value: wordpress
 
-  RDSMasterUsername:
+  RDS_MasterUsername:
     Description: Usuario administrador RDS
     Value: admin
+
+  VPCCidr:
+    Description: CIDR de la VPC
+    Value: !GetAtt VPC.CidrBlock
