@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Transit Gateway que conecta dos VPCs
+
+    Utilizado CloudFormation para AWS Academy Learning Lab
+    Autor: Javier Teran Gonzalez
+    Fecha creacion:     16/03/2026
+    
+  Version: 1.0
+  Modificaciones: 16/03/2026.
+Parameters:
+  Stack1Name:
+    Type: String
+    Default: tsg-NN
+  Stack2Name:
+    Type: String
+    Default: tsg-XX
+
+Resources:
+  TransitGateway:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      Description: TGW para conectar VPCs
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-tgw
+
+  # Attachment para VPC 1
+  TGWAttachment1Public:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !ImportValue 
+        Fn::Sub: '${Stack1Name}-VPC-ID'
+      SubnetIds:
+        - !ImportValue
+          Fn::Sub: '${Stack1Name}-PublicSubnet1-ID'
+  TGWAttachment1Private:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !ImportValue 
+        Fn::Sub: '${Stack1Name}-VPC-ID'
+      SubnetIds:
+        - !ImportValue
+          Fn::Sub: '${Stack1Name}-PrivateSubnet1-ID'
+
+  # Attachment para VPC 2
+  TGWAttachment2Public:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !ImportValue 
+        Fn::Sub: '${Stack2Name}-VPC-ID'
+      SubnetIds:
+        - !ImportValue
+          Fn::Sub: '${Stack2Name}-PublicSubnet2-ID'
+  TGWAttachment2Private:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !ImportValue 
+        Fn::Sub: '${Stack2Name}-VPC-ID'
+      SubnetIds:
+        - !ImportValue
+          Fn::Sub: '${Stack2Name}-PrivateSubnet2-ID'
+
+Outputs:
+  TransitGatewayId:
+    Value: !Ref TransitGateway
+    Export:
+      Name: TransitGateway-ID
