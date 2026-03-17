@@ -921,36 +921,36 @@ Resources:
 # OUTPUTS
 # =============================================
 Outputs:
-  ALB_URL:
+  ALBURL:
     Description: URL del Application Load Balancer
     Value: !Sub http://${ApplicationLoadBalancer.DNSName}
 
-  ALB_URL_Correcta:
+  ALBURLCorrecta:
     Description: URL del Application Load Balancer con Registro DNS
     Value: !Sub http://${WordpressHostHeader}
 
 
-  DNS_Registro_Wordpress:
+  DNSRegistroWordpress:
     Description: Registro DNS que ha que crear para Wordpress
     Value: !Sub "registro DNS ${WordpressHostHeader}  CNAME  ${ApplicationLoadBalancer.DNSName}"
     
-  EFS_FileSystemId:
+  EFSFileSystemId:
     Description: ID del sistema de archivos EFS
     Value: !Ref EFSFileSystem
 
-  EFS_FileSystemDNS:
+  EFSFileSystemDNS:
     Description: DNS del sistema de archivos EFS para montar
     Value: !Sub ${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com
 
-  RDS_Endpoint:
+  RDSEndpoint:
     Description: Endpoint de la instancia RDS MySQL
     Value: !GetAtt RDSMySQLInstance.Endpoint.Address
 
-  RDS_DatabaseName:
+  RDSDatabaseName:
     Description: Nombre de la base de datos
     Value: wordpress
 
-  RDS_MasterUsername:
+  RDSMasterUsername:
     Description: Usuario administrador RDS
     Value: admin
 
