@@ -237,6 +237,7 @@ Resources:
           ImageId: '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'          
           InstanceType: t2.micro
           KeyName: vockey
+          IamInstanceProfile: LabInstanceProfile          
           Monitoring: false
           SecurityGroupIds:
               - !Ref UbuntuSecurityGroup
