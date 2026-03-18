@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: 2010-09-09
 Description: >
   USO DE TRANSIT GATEWAY PARA CONECTAR VPCs
   Creacion de 
@@ -50,8 +50,8 @@ Resources:
             CidrBlock: !Select [0, !Cidr [!GetAtt VPC.CidrBlock, 6, 8]]
             Ipv6CidrBlock:  !Select [0, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
-            AvailabilityZone: !Select [ 0, !GetAZs '' ]
             MapPublicIpOnLaunch: true
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
             Tags:
                 - Key: Name
                   Value: !Sub '${AWS::StackName}${NN}-PublicSubnet1'
@@ -62,6 +62,7 @@ Resources:
             CidrBlock: !Select [1, !Cidr [!GetAtt VPC.CidrBlock, 6, 8]]
             Ipv6CidrBlock:  !Select [1, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
+            MapPublicIpOnLaunch: true
             AvailabilityZone: !Select [ 1, !GetAZs '' ]
             Tags:
                 - Key: Name
@@ -75,6 +76,7 @@ Resources:
             CidrBlock: !Select [4, !Cidr [!GetAtt VPC.CidrBlock, 6, 8]]
             Ipv6CidrBlock:  !Select [2, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
+            MapPublicIpOnLaunch: false
             AvailabilityZone: !Select [ 0, !GetAZs '' ]
             Tags:
                 - Key: Name
@@ -86,6 +88,7 @@ Resources:
             CidrBlock: !Select [5, !Cidr [!GetAtt VPC.CidrBlock, 6, 8]]
             Ipv6CidrBlock:  !Select [3, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
             AssignIpv6AddressOnCreation: true
+            MapPublicIpOnLaunch: false
             AvailabilityZone: !Select [ 1, !GetAZs '' ]
             Tags:
                 - Key: Name
@@ -233,9 +236,8 @@ Resources:
     UbuntuInstance:
         Type: AWS::EC2::Instance
         Properties:
-          #ImageId: !Ref AMIUbuntu
           ImageId: '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'          
-          InstanceType: t2.micro
+          InstanceType: t3.micro
           KeyName: vockey
           IamInstanceProfile: LabInstanceProfile          
           Monitoring: false
@@ -297,3 +299,18 @@ Outputs:
         Value: !Ref PrivateSubnet2
         Export:
             Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+    PublicRouteTableId:
+        Description: "Public Route Table ID"
+        Value: !Ref TablaRutasPublica
+        Export:
+            Name: !Sub '${AWS::StackName}-PublicRouteTable-ID'
+    PrivateRouteTable1Id:
+        Description: "Private Route Table 1 ID"
+        Value: !Ref TablaRutasPrivada1
+        Export:
+            Name: !Sub '${AWS::StackName}-PrivateRouteTable1-ID'
+    PrivateRouteTable2Id:
+        Description: "Private Route Table 2 ID"
+        Value: !Ref TablaRutasPrivada2
+        Export:
+            Name: !Sub '${AWS::StackName}-PrivateRouteTable2-ID'

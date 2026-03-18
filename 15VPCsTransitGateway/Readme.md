@@ -78,6 +78,50 @@ aws cloudformation create-stack \
 ✅ **Monitoreo**: SSM Agent para Systems Manager Session Manager  
 ✅ **Automatizado**: Toda la infraestructura con Infrastructure as Code  
 
+## TransitGateway Peering
+
+Si quiero conectar VPCs en diferentes regiones, puedo usar Transit Gateway Peering. Esto permite que Transit Gateways en distintas regiones se comuniquen entre sí, facilitando la conexión de VPCs globalmente sin necesidad de VPN o conexiones directas.
+
+
+*El Transit Gateway (TGW) Peering es una solución avanzada que te permite conectar dos Transit Gateways que residen en cuentas (o regiones) diferentes sin necesidad de AWS Resource Access Manager.*
+
+Para conectar 3 cuentas (Cuenta A, Cuenta B y Cuenta C) usando este método, el diseño sería el siguiente:
+
+* La Arquitectura (Topología de Estrella o Malla)
+* Debes crear un Transit Gateway en cada cuenta. Luego, estableces "Peering Attachments" entre ellos.
+
+
+1. Cuenta A: Crea TGW-A y conéctalo a sus propias VPCs mediante  VPC Attachment.
+
+2. Cuenta B: Crea TGW-B y conéctalo a sus propias VPCs.
+
+### Paso a Paso para el "Hack" del Peering
+#### 1. Crear la solicitud de Peering (Desde Cuenta A)
+Ve a la consola de VPC > Transit Gateway Attachments y haz clic en Create transit gateway attachment:
+
+1. Transit Gateway ID: Selecciona tu TGW-A.
+
+2. Attachment type: Elige Peering Connection.
+
+3. Account: Selecciona Remote account e ingresa el ID de la Cuenta B.
+
+4. Region: Selecciona la región donde esté el otro TGW (aunque sea la misma).
+
+5. Transit Gateway (Acceptor): Ingresa el ID del TGW-B (tendrás que pedírselo al compañero o copiarlo de tu otra sesión).
+
+#### 2. Aceptar la solicitud (En Cuenta B)
+En la Cuenta B, ve a Transit Gateway Attachments. Verás una conexión con estado pending-acceptance. Selecciónala y dale a Actions > Accept transit gateway attachment.
+
+
+#### 3. El verdadero reto: El Enrutamiento (Routing)
+Aquí es donde la mayoría falla. El tráfico no fluirá solo porque el peering esté "Available". Tienes que configurar tres capas de rutas:
+
+* En la VPC (Cuenta A): Tu tabla de rutas de la subred debe decir: "Para ir a la IPs de la Cuenta B, sal por el tgw-A".
+
+* En el TGW-A (Cuenta A): Debes ir a Transit Gateway Route Tables y añadir una ruta estática: "Para ir a las IPs de la Cuenta B, usa el peering-attachment que creamos".
+
+* En el TGW-B (Cuenta B): Debes hacer lo mismo a la inversa para que el tráfico sepa volver.
+
 ---
 
 ## Autor
