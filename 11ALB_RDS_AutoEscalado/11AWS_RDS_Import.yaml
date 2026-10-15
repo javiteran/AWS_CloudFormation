@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+    Plantilla CloudFormation para crear una base de datos RDS MySQL.
+    Utiliza los datos de la VPC y subredes creadas en la pila anterior. Con !ImportValue
+    Autor: Javier Teran Gonzalez
+    Fecha creacion:     18/02/2025
+    Version: 1.01
+Resources:
+  MiDDBBsg:
+      Type: 'AWS::EC2::SecurityGroup'
+      Properties: 
+        GroupName: !Join [ '', [!ImportValue Proyecto, '-bbdd-sg']]
+        GroupDescription: 'MiDDBBsg. Habilitar el acceso a la base de datos MySQL'
+        VpcId: !ImportValue MiVPCID        # Referencia al VPC donde estará la base de datos
+        SecurityGroupIngress: 
+          - IpProtocol: 'tcp'
+            FromPort: '3306'
+            ToPort: '3306'
+            SourceSecurityGroupId: !ImportValue MisDestinosSGID  # Referencia al grupo de seguridad de Ubuntus Destinos
+            Description: Permitir trafico desde el grupo de seguridad de los Ubuntus Balanceados  
+          - IpProtocol: 'tcp'
+            FromPort: '3306'
+            ToPort: '3306'
+            SourceSecurityGroupId: !ImportValue MiBastionSGID  # Referencia al grupo de seguridad de Ubuntu Bastion
+            Description: Permitir trafico desde el grupo de seguridad del ubuntu bastion
+        Tags:
+            - Key: Name
+              Value: !Join [ '', [!ImportValue Proyecto, '-bbdd-sg']]
+  MiGrupoSubredesDB:
+      Type: 'AWS::RDS::DBSubnetGroup'
+      Properties:
+        DBSubnetGroupDescription: 'Grupo de subredes para la base de datos MySQL'
+        SubnetIds: 
+          - !ImportValue MiSubredPrivada1ID # Subredes privadas de la VPC
+          - !ImportValue MiSubredPrivada2ID # Subredes privadas de la VPC
+          - !ImportValue MiSubredPrivada3ID # Subredes privadas de la VPC
+
+  MiInstanciaBBDD:
+      Type: 'AWS::RDS::DBInstance'
+      Properties: 
+        #DBInstanceIdentifier: !ImportValue '${Proyecto}-bbdd'    # Nombre de la instancia de la base de datos
+        DBInstanceIdentifier:  !Join [ '', [!ImportValue Proyecto, '-bbdd']]   # Nombre de la instancia de la base de datos
+        DBInstanceClass: 'db.t3.micro'        # Clase de instancia de la base de datos (db.t3.micro es adecuada para pruebas)
+        AllocatedStorage: '20'                # Almacenamiento en GB
+        DBName: MiBaseDatos                   # Nombre de la base de datos
+        Engine: MySQL                         # Motor de base de datos (en este caso MySQL)
+        EngineVersion: '8.0'                  # Versión de MySQL
+        MasterUsername: 'admin'               # Usuario administrador
+        MasterUserPassword: 'admin12345'      # Contraseña del administrador (modifica para producción)
+        BackupRetentionPeriod: 7              # Número de días que se retendrán los backups automáticos
+        MultiAZ: False                        # Si es una instancia Multi-AZ o no
+        PubliclyAccessible: False             # Define si la base de datos es accesible públicamente
+        StorageType: 'gp2'                    # Tipo de almacenamiento (gp2 es almacenamiento en discos SSD)
+        VPCSecurityGroups: 
+          - !Ref MiDDBBsg                     # Referencia al grupo de seguridad de la base de datos
+        DBSubnetGroupName: !Ref MiGrupoSubredesDB  # Subnet group de la base de datos
+
+  MyRecordSetBastion:
+        Type: AWS::Route53::RecordSet
+        Properties:
+            #HostedZoneId: !Ref PrivateHostedZone
+            #Name: !Sub 'rds.${NombreProyecto}${NN}.es'
+            HostedZoneId: !ImportValue MiZonaDNSPrivada
+            Name: !Join [ '', ['rds.',!ImportValue Proyecto, '.es']]
+            Type: CNAME
+            TTL: '60'
+            ResourceRecords:
+                - !GetAtt MiInstanciaBBDD.Endpoint.Address
+Outputs:
+      DBInstanceEndpoint:
+        Description: 'Endpoint/DNS de la base de datosMySQL'
+        Value: !GetAtt MiInstanciaBBDD.Endpoint.Address

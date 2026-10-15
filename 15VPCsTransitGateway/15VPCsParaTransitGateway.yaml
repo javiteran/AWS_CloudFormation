@@ -1,0 +1,316 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  USO DE TRANSIT GATEWAY PARA CONECTAR VPCs
+  Creacion de 
+      - VPCs con IPv4 e IPv6
+        - 2 subredes publicas y 2 subredes privadas
+        - Internet gateway IGW
+        - EgressOnlyInternetGateway EIGW
+        - tabla de rutas con IPv4 e IPv6 y sus asociaciones a las subredes
+        - una instancia EC2 Ubuntu Server 24.04 con puertos abiertos. IPv6 e IPv4 elastica
+      - 1 Transit Gateway
+        - Asociacion de las VPCs al Transit Gateway
+
+
+  Utilizado CloudFormation para AWS Academy Learning Lab
+  Autor: Javier Teran Gonzalez
+  Fecha creacion:     16/03/2026
+  
+  Version: 1.0
+  Modificaciones: 16/03/2026.
+Parameters:
+    NN:
+        Type: Number
+        Description: Numero de VPC
+        Default: 15
+        ConstraintDescription: 'Debe estar en el rango del [1-55]'
+        MinValue: 1
+        MaxValue: 55
+Resources:
+    VPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock:  !Sub 10.1${NN}.0.0/16
+            EnableDnsHostnames: true
+            EnableDnsSupport: true
+            Tags:
+                - Key: Name
+                  Value: !Sub '${AWS::StackName}${NN}-vpc'
+    IPv6CidrBlock:
+        Type: AWS::EC2::VPCCidrBlock
+        Properties:
+            VpcId: !Ref VPC
+            AmazonProvidedIpv6CidrBlock: true
+
+    # SubRedes publicas
+    PublicSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Select [0, !Cidr [!GetAtt VPC.CidrBlock, 6, 8]]
+            Ipv6CidrBlock:  !Select [0, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            MapPublicIpOnLaunch: true
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            Tags:
+                - Key: Name
+                  Value: !Sub '${AWS::StackName}${NN}-PublicSubnet1'
+    PublicSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Select [1, !Cidr [!GetAtt VPC.CidrBlock, 6, 8]]
+            Ipv6CidrBlock:  !Select [1, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            MapPublicIpOnLaunch: true
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            Tags:
+                - Key: Name
+                  Value: !Sub '${AWS::StackName}${NN}-PublicSubnet2'
+
+    # SubRedes privadas
+    PrivateSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Select [4, !Cidr [!GetAtt VPC.CidrBlock, 6, 8]]
+            Ipv6CidrBlock:  !Select [2, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            MapPublicIpOnLaunch: false
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            Tags:
+                - Key: Name
+                  Value: !Sub '${AWS::StackName}${NN}-PrivateSubnet1'
+    PrivateSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Select [5, !Cidr [!GetAtt VPC.CidrBlock, 6, 8]]
+            Ipv6CidrBlock:  !Select [3, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 256, 64]]
+            AssignIpv6AddressOnCreation: true
+            MapPublicIpOnLaunch: false
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            Tags:
+                - Key: Name
+                  Value: !Sub '${AWS::StackName}${NN}-PrivateSubnet2'
+
+    # Internet Gateway y EgressOnlyInternetGateway
+    InternetGateway:
+        Type: AWS::EC2::InternetGateway
+        Properties:
+            Tags:
+                - Key: Name
+                  Value: !Sub '${AWS::StackName}${NN}-igw'
+
+    VPCGatewayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            VpcId: !Ref VPC
+            InternetGatewayId: !Ref InternetGateway
+
+    # Puerta de enlace de internet solo de salida para IPv6 EIgw    
+    EgressOnlyInternetGateway:
+        Type: AWS::EC2::EgressOnlyInternetGateway
+        Properties: 
+          VpcId: !Ref VPC
+
+    # Tabla de rutas publica
+    TablaRutasPublica:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                - Key: Name
+                  Value: !Sub '${AWS::StackName}${NN}-rtb-public'
+
+    # Tablas de rutas privadas
+    TablaRutasPrivada1:
+        Type: "AWS::EC2::RouteTable"
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                - Key: "Name"
+                  Value: !Sub '${AWS::StackName}${NN}-rtb-private1'
+    TablaRutasPrivada2:
+        Type: "AWS::EC2::RouteTable"
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                - Key: "Name"
+                  Value: !Sub '${AWS::StackName}${NN}-rtb-private2'
+
+    # Rutas por defecto para la tabla de rutas publica. Tanto IPv4 como IPv6
+    DefaultRouteIPv4:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref TablaRutasPublica
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: !Ref InternetGateway
+    DefaultRouteIPv6:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref TablaRutasPublica
+            DestinationIpv6CidrBlock: ::/0
+            GatewayId: !Ref InternetGateway
+    
+
+    # Asociacion de subredes publicas con tabla de rutas
+    SubnetRouteTableAssociation1:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref PublicSubnet1
+            RouteTableId: !Ref TablaRutasPublica
+    SubnetRouteTableAssociation2:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref PublicSubnet2
+            RouteTableId: !Ref TablaRutasPublica
+
+    # Asociacion de subredes privadas con tabla de rutas
+    SubnetRouteTableAssociation3:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref PrivateSubnet1
+            RouteTableId: !Ref TablaRutasPrivada1
+    SubnetRouteTableAssociation4:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref PrivateSubnet2
+            RouteTableId: !Ref TablaRutasPrivada2
+
+    # Grupo de seguridad Ubuntu. Puertos DNS, HTTP, HTTPS y SSH IPv4/IPv6
+    UbuntuSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: !Sub '${AWS::StackName}${NN}-us-sg'
+            GroupDescription: !Sub '${AWS::StackName}${NN}-us-sg'
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIp: 0.0.0.0/0
+                Description: Permitir HTTP IPv4       
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIp: 0.0.0.0/0
+                Description: Permitir HTTPS IPv4           
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIp: 0.0.0.0/0
+                Description: Permitir SSH IPv4
+              - IpProtocol: tcp
+                FromPort: 80
+                ToPort: 80
+                CidrIpv6: ::/0
+                Description: Permitir HTTP IPv6           
+              - IpProtocol: tcp
+                FromPort: 443
+                ToPort: 443
+                CidrIpv6: ::/0
+                Description: Permitir HTTPS IPv6            
+              - IpProtocol: tcp
+                FromPort: 22
+                ToPort: 22
+                CidrIpv6: ::/0
+                Description: Permitir SSH IPv6
+              - IpProtocol: icmp
+                FromPort: -1
+                ToPort: -1
+                CidrIp: 0.0.0.0/0
+                Description: Permitir ICMP IPv4 desde cualquier sitio
+              - IpProtocol: icmpv6
+                FromPort: -1
+                ToPort: -1
+                CidrIpv6: ::/0
+                Description: Permitir ICMP IPv6 desde cualquier sitio
+            Tags:
+                - Key: Name
+                  Value: !Sub '${AWS::StackName}${NN}-us-sg'
+    
+    # Creacion de instancia Ubuntu
+    UbuntuInstance:
+        Type: AWS::EC2::Instance
+        Properties:
+          ImageId: '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'          
+          InstanceType: t3.micro
+          KeyName: vockey
+          IamInstanceProfile: LabInstanceProfile          
+          Monitoring: false
+          SecurityGroupIds:
+              - !Ref UbuntuSecurityGroup
+          SubnetId: !Ref PublicSubnet1
+          PrivateIpAddress: !Sub '10.1${NN}.0.100'
+          UserData:
+            Fn::Base64: !Sub |
+              #!/bin/bash
+              echo 'User data para Ubuntu Server'
+              apt-get update -y
+              apt-get upgrade -y
+              apt-get install bind9 -y
+              apt install apache2  -y
+              apt install php php-mysql -y
+
+              # Instalar SSM Agent en Ubuntu
+              snap install amazon-ssm-agent --classic
+              systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+              systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
+          Tags:
+            - Key: Name
+              Value: !Sub '${AWS::StackName}${NN}-us'
+          BlockDeviceMappings:
+            - DeviceName: /dev/sda1  # El volumen raíz de la instancia
+              Ebs:
+                VolumeSize: 20  # Tamaño del volumen en GB
+                VolumeType: gp3  # Tipo de volumen
+                DeleteOnTermination: true  # El volumen se eliminará cuando la instancia termine
+Outputs:
+    VPCId:
+        Description: "VPC ID"
+        Value: !Ref VPC
+        Export:
+            Name: !Sub '${AWS::StackName}-VPC-ID'
+    VPCNombre:
+        Description: "VPC Name"
+        Value: !Sub '${AWS::StackName}'
+        Export:
+            Name: !Sub '${AWS::StackName}-VPC-Nombre'
+    PublicSubnet1Id:
+        Description: "Public Subnet 1 ID"
+        Value: !Ref PublicSubnet1
+        Export:
+            Name: !Sub '${AWS::StackName}-PublicSubnet1-ID'
+    PublicSubnet2Id:
+        Description: "Public Subnet 2 ID"
+        Value: !Ref PublicSubnet2
+        Export:
+            Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
+    PrivateSubnet1Id:
+        Description: "Private Subnet 1 ID"
+        Value: !Ref PrivateSubnet1
+        Export:
+            Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
+    PrivateSubnet2Id:
+        Description: "Private Subnet 2 ID"
+        Value: !Ref PrivateSubnet2
+        Export:
+            Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+    PublicRouteTableId:
+        Description: "Public Route Table ID"
+        Value: !Ref TablaRutasPublica
+        Export:
+            Name: !Sub '${AWS::StackName}-PublicRouteTable-ID'
+    PrivateRouteTable1Id:
+        Description: "Private Route Table 1 ID"
+        Value: !Ref TablaRutasPrivada1
+        Export:
+            Name: !Sub '${AWS::StackName}-PrivateRouteTable1-ID'
+    PrivateRouteTable2Id:
+        Description: "Private Route Table 2 ID"
+        Value: !Ref TablaRutasPrivada2
+        Export:
+            Name: !Sub '${AWS::StackName}-PrivateRouteTable2-ID'

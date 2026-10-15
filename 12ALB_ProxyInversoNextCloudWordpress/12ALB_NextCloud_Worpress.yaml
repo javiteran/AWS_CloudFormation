@@ -1,0 +1,618 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  - VPC con 2 subredes publicas, 2 subredes privadas, Internet Gateway y NAT Gateway regional.
+  - EC2 - nextcloud en red privada
+  - EC2 - wordpress en red privada
+  - 1 Target Group para cada una de esas instancias
+  - 1 ALB actuando como proxy inverso con dos reglas que según el "encabezado de host/URL" envíe a un sitio o al otro. Inicialmente sólo escucha en el puerto 80
+  - Si añado un listener en el puerto 443 habrá que pedir dos certificados en el ACM, añadirlos al listener que también tendrá Reglas. Convendría redirigir el tráfico del 80 al 443.
+
+  - Faltaría la BBDD donde meter los sitios ;-). Pero eso es fácil de añadir e inicialmente sólo era para probar el proxy inverso.
+
+Parameters:
+  VpcCIDR:
+    Description: Rango CIDR para la VPC (minimo /22 para crear 4 subredes /24)
+    Type: String
+    Default: 10.26.0.0/22
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: Debe ser un CIDR valido (ej. 10.0.0.0/22)
+
+  WordpressHostHeader:
+    Description: Nombre de dominio DNS para enrutar trafico a Wordpress
+    Type: String
+    Default: wp1.alisal01.com.es
+
+  NextCloudHostHeader:
+    Description: Nombre de dominio DNS para enrutar trafico a NextCloud
+    Type: String
+    Default: nc1.alisal01.com.es
+
+Resources:
+  # =============================================
+  # VPC
+  # =============================================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC
+
+  # =============================================
+  # INTERNET GATEWAY
+  # =============================================
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-IGW
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # =============================================
+  # SUBREDES PUBLICAS
+  # Las subredes se calculan automaticamente usando Fn::Cidr
+  # Subred 0: Primera subred publica (/24)
+  # Subred 1: Segunda subred publica (/24)
+  # Subred 2: Primera subred privada (/24)
+  # Subred 3: Segunda subred privada (/24)
+  # =============================================
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCIDR, 4, 8]]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Subnet-AZ1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCIDR, 4, 8]]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Subnet-AZ2
+
+  # =============================================
+  # SUBREDES PRIVADAS
+  # =============================================
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCIDR, 4, 8]]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-Subnet-AZ1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [3, !Cidr [!Ref VpcCIDR, 4, 8]]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-Subnet-AZ2
+
+  # =============================================
+  # NAT GATEWAY (Regional - una sola para ambas subredes privadas)
+  # =============================================
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-NAT-EIP
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-NAT-Gateway
+
+  # =============================================
+  # TABLA DE ENRUTAMIENTO PUBLICA
+  # =============================================
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-Routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # =============================================
+  # TABLA DE ENRUTAMIENTO PRIVADA
+  # =============================================
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-Routes
+
+  DefaultPrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
+
+  # =============================================
+  # GRUPOS DE SEGURIDAD - HTTP
+  # =============================================
+  WordpressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: ALBSecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-Wordpress-SG
+      GroupDescription: Grupo de seguridad para Wordpress - Solo HTTP
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Permitir trafico HTTP solo desde el ALB
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Permitir todo el trafico de salida
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Wordpress-SG
+
+  NextCloudSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: ALBSecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-NextCloud-SG
+      GroupDescription: Grupo de seguridad para NextCloud - Solo HTTP
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Permitir trafico HTTP solo desde el ALB
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Permitir todo el trafico de salida
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-NextCloud-SG
+
+  # =============================================
+  # INSTANCIAS EC2
+  # =============================================
+  WordpressInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: DefaultPrivateRoute
+    Properties:
+      InstanceType: t3.micro
+      ImageId: '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref WordpressSecurityGroup
+      KeyName: vockey
+      IamInstanceProfile: LabInstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          
+          apt-get update -y
+          apt-get upgrade -y
+
+          # Instalar SSM Agent en Ubuntu
+          snap install amazon-ssm-agent --classic
+          systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+          systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
+
+          apt-get install apache2 -y
+          apt-get install php php-common libapache2-mod-php php-bz2 php-gd php-mysql \
+          php-curl php-mbstring php-imagick php-zip php-common php-curl php-xml \
+          php-json php-bcmath php-xml php-intl php-gmp zip unzip wget -y
+          a2enmod env rewrite dir mime headers setenvif ssl
+          systemctl restart apache2
+          systemctl enable apache2
+
+          #Descarga y descomprime la ultima version del wordpress
+          #Se necesita un RDS para la bbdd
+          cd /home/ubuntu
+          rm /var/www/html/index.html
+          wget https://wordpress.org/latest.zip -O latest.zip
+          unzip latest.zip
+          cd wordpress
+          cp -R . /var/www/html
+          cd ..
+          rm latest.zip
+          rm -R wordpress
+          chown -R www-data:www-data /var/www/html/
+
+          # Configurar CloudWatch Logs
+          LOG_GROUP="/ec2/ubuntu24"
+          REGION="${AWS::Region}"
+          # Instalar CloudWatch Agent  INICIO #############################
+          # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/download-CloudWatch-Agent-on-EC2-Instance-commandline-first.html
+          wget https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb           
+          dpkg -i amazon-cloudwatch-agent.deb
+          
+          # Crear configuración del agente
+          cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
+          {
+            "agent": {
+              "region": "$REGION"
+            },
+            "logs": {
+              "logs_collected": {
+                "files": {
+                  "collect_list": [
+                    {
+                      "file_path": "/var/log/syslog",
+                      "log_group_name": "$LOG_GROUP",
+                      "log_stream_name": "{instance_id}",
+                      "timezone": "UTC"
+                    },
+                    {
+                      "file_path": "/var/log/apache2/access.log",
+                      "log_group_name": "$LOG_GROUP",
+                      "log_stream_name": "{instance_id}-apache-access",
+                      "timezone": "UTC"
+                    },
+                    {
+                      "file_path": "/var/log/apache2/error.log",
+                      "log_group_name": "$LOG_GROUP",
+                      "log_stream_name": "{instance_id}-apache-error",
+                      "timezone": "UTC"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+          EOF
+          
+          # Iniciar el agente
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+            -a fetch-config \
+            -m ec2 \
+            -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+            -s
+          
+          # Habilitar el servicio
+          systemctl enable amazon-cloudwatch-agent
+          systemctl restart amazon-cloudwatch-agent
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Wordpress
+
+  NextCloudInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: DefaultPrivateRoute
+    Properties:
+      InstanceType: t3.micro
+      ImageId: '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'
+      SubnetId: !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref NextCloudSecurityGroup
+      KeyName: vockey
+      IamInstanceProfile: LabInstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          
+          apt-get update -y
+          apt-get upgrade -y
+
+          # Instalar SSM Agent en Ubuntu
+          snap install amazon-ssm-agent --classic
+          systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+          systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
+
+          apt-get install apache2 -y
+          apt-get install php php-common libapache2-mod-php php-bz2 php-gd php-mysql \
+          php-curl php-mbstring php-imagick php-zip php-common php-curl php-xml \
+          php-json php-bcmath php-xml php-intl php-gmp zip unzip wget -y
+          a2enmod env rewrite dir mime headers setenvif ssl
+          systemctl restart apache2
+          systemctl enable apache2
+
+          #Descarga y descomprime la ultima version del nextcloud
+          #Se necesita un RDS para la bbdd
+          cd /home/ubuntu
+          wget https://download.nextcloud.com/server/releases/latest.zip
+          unzip latest.zip
+          cd nextcloud
+          cp -R . /var/www/html
+          cd ..
+          rm latest.zip
+          rm -R nextcloud
+          chown -R www-data:www-data /var/www/html/
+
+          # Configurar CloudWatch Logs
+          LOG_GROUP="/ec2/ubuntu24"
+          REGION="${AWS::Region}"
+          # Instalar CloudWatch Agent  INICIO #############################
+          # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/download-CloudWatch-Agent-on-EC2-Instance-commandline-first.html
+          wget https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb           
+          dpkg -i amazon-cloudwatch-agent.deb
+          
+          # Crear configuración del agente
+          cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
+          {
+            "agent": {
+              "region": "$REGION"
+            },
+            "logs": {
+              "logs_collected": {
+                "files": {
+                  "collect_list": [
+                    {
+                      "file_path": "/var/log/syslog",
+                      "log_group_name": "$LOG_GROUP",
+                      "log_stream_name": "{instance_id}",
+                      "timezone": "UTC"
+                    },
+                    {
+                      "file_path": "/var/log/apache2/access.log",
+                      "log_group_name": "$LOG_GROUP",
+                      "log_stream_name": "{instance_id}-apache-access",
+                      "timezone": "UTC"
+                    },
+                    {
+                      "file_path": "/var/log/apache2/error.log",
+                      "log_group_name": "$LOG_GROUP",
+                      "log_stream_name": "{instance_id}-apache-error",
+                      "timezone": "UTC"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+          EOF
+          
+          # Iniciar el agente
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+            -a fetch-config \
+            -m ec2 \
+            -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+            -s
+          
+          # Habilitar el servicio
+          systemctl enable amazon-cloudwatch-agent
+          systemctl restart amazon-cloudwatch-agent
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-NextCloud
+
+  # =============================================
+  # TARGET GROUPS
+  # =============================================
+  WordpressTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${AWS::StackName}-Wordpress-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Matcher:
+        HttpCode: 200-399
+      Targets:
+        - Id: !Ref WordpressInstance
+          Port: 80
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Wordpress-TG
+
+  NextCloudTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${AWS::StackName}-NextCloud-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Matcher:
+        HttpCode: 200-399
+      Targets:
+        - Id: !Ref NextCloudInstance
+          Port: 80
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-NextCloud-TG
+
+  # =============================================
+  # APPLICATION LOAD BALANCER
+  # =============================================
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${AWS::StackName}-ALB-SG
+      GroupDescription: Grupo de seguridad para el Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Permitir trafico HTTP desde cualquier origen
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Permitir trafico HTTPs desde cualquier origen
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Permitir todo el trafico de salida
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-ALB-SG
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${AWS::StackName}-ALB
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-ALB
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WordpressTargetGroup
+
+  # =============================================
+  # LISTENER RULES - Host Header Based Routing
+  # =============================================
+  WordpressListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref ALBListener
+      Priority: 1
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - !Ref WordpressHostHeader
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref WordpressTargetGroup
+
+  NextCloudListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref ALBListener
+      Priority: 2
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - !Ref NextCloudHostHeader
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref NextCloudTargetGroup
+
+# =============================================
+# OUTPUTS
+# =============================================
+Outputs:
+  VPCCidr:
+    Description: CIDR de la VPC
+    Value: !GetAtt VPC.CidrBlock
+
+  ApplicationLoadBalancerURL:
+    Description: URL del Application Load Balancer
+    Value: !Sub http://${ApplicationLoadBalancer.DNSName}
+
+  DNSRegistroWordpress:
+    Description: Registro DNS para Wordpress
+    Value: !Sub "registro DNS ${WordpressHostHeader}  CNAME  ${ApplicationLoadBalancer.DNSName}"
+
+  DNSRegistroNextCloud:
+    Description: Registro DNS para NextCloud
+    Value: !Sub "registro DNS ${NextCloudHostHeader}  CNAME  ${ApplicationLoadBalancer.DNSName}"
+
+  InstanceIdWordpress:
+    Description: ID de la instancia Wordpress
+    Value: !Ref WordpressInstance
+
+  InstanceIdNextCloud:
+    Description: ID de la instancia NextCloud
+    Value: !Ref NextCloudInstance
+
+  URLWordpress:
+    Description: URL del Wordpress
+    Value: !Sub http://${WordpressHostHeader}
+
+  URLNextCloud:
+    Description: URL del NextCloud
+    Value: !Sub http://${NextCloudHostHeader}

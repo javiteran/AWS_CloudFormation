@@ -28,9 +28,9 @@ Parameters:
         MinValue: 1
         MaxValue: 50
     AMIUbuntu:
-        Description: AMI ID Ubuntu Server 25.04.
+        Description: AMI ID Ubuntu Server 24.04.
         Type: String
-        Default: 'ami-04b4f1a9cf54c11d0'    
+        Default: 'ami-0ecb62995f68bb549'    
     AgenteEscuchaHttps:
         Description: |
             El agente de escucha del balanceador debe hacerlo por https?. 
