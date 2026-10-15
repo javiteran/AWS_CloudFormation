@@ -1,0 +1,400 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creacion de
+      - VPC con IPv4 e IPv6 (bloque IPv6 proporcionado por AWS)
+      - 2 subredes publicas en 2 zonas de disponibilidad
+      - Internet gateway IGW
+      - tabla de rutas con IPv4 e IPv6 y sus asociaciones a las subredes
+      - una instancia EC2 Ubuntu Server con puertos abiertos. IPv6 e IPv4 elastica
+      - una instancia EC2 Windows Server 2022 con puertos abiertos. IPv6 e IPv4 elastica
+
+  Equivalente en CloudFormation al script 00AWSLab01_IPv4_IPv6_2AZ.sh (AWS CLI).
+  Utilizado para AWS Academy Learning Lab
+  Autor: Javier Teran Gonzalez
+
+Metadata:
+    AWS::CloudFormation::Interface:
+        ParameterGroups:
+            - Label:
+                  default: Alumno y proyecto
+              Parameters:
+                  - NN
+                  - Proyecto
+            - Label:
+                  default: Direccionamiento IPv4
+              Parameters:
+                  - RedBase
+            - Label:
+                  default: Instancias EC2
+              Parameters:
+                  - AMIUbuntu
+                  - AMIWindows
+                  - NombreClave
+
+Parameters:
+    NN:
+        Type: String
+        Description: Numero de alumno NN (dos digitos, entre 01 y 55). Genera los CIDR, IPs, nombres y etiquetas
+        Default: '01'
+        AllowedPattern: '^(0[1-9]|[1-4][0-9]|5[0-5])$'
+        ConstraintDescription: 'Debe ser un numero de dos digitos entre 01 y 55 (la subred 2NN no puede superar 255)'
+    Proyecto:
+        Type: String
+        Description: Prefijo del nombre del proyecto. Los recursos se llamaran <Proyecto><NN>-xxx
+        Default: SRI26
+        AllowedPattern: '^[A-Za-z0-9-]+$'
+        ConstraintDescription: 'Solo letras, numeros y guiones'
+    RedBase:
+        Type: Number
+        Description: Segundo octeto de la red 10.X.0.0/16 de la VPC. (Normalmente curso escolar)
+        Default: 26
+        MinValue: 0
+        MaxValue: 255
+    AMIUbuntu:
+        Type: AWS::EC2::Image::Id
+        Description: AMI ID Ubuntu Server
+        Default: ami-0b6d9d3d33ba97d99
+    AMIWindows:
+        Type: AWS::EC2::Image::Id
+        Description: AMI ID Windows Server 2022
+        Default: ami-0ed58a129008c2cc2
+    NombreClave:
+        Type: AWS::EC2::KeyPair::KeyName
+        Description: Par de claves para las instancias
+        Default: vockey
+
+Resources:
+    # VPC con IPv4. El bloque IPv6 se asocia a continuacion
+    VPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: !Sub '10.${RedBase}.0.0/16'
+            EnableDnsSupport: true
+            EnableDnsHostnames: true
+            Tags:
+                - Key: Name
+                  Value: !Sub '${Proyecto}${NN}-vpc'
+    IPv6CidrBlock:
+        Type: AWS::EC2::VPCCidrBlock
+        Properties:
+            VpcId: !Ref VPC
+            AmazonProvidedIpv6CidrBlock: true
+
+    # Subredes publicas. Los /64 IPv6 son el 2o y 3er bloque del /56 de la VPC (xxxx:xxxx:xxxx:xx01::/64 y xx02::/64)
+    SubredPublica1:
+        Type: AWS::EC2::Subnet
+        DependsOn: IPv6CidrBlock
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Sub '10.${RedBase}.1${NN}.0/24'
+            Ipv6CidrBlock: !Select [1, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 256, 64]]
+            AvailabilityZone: !Select [0, !GetAZs '']
+            MapPublicIpOnLaunch: true
+            Tags:
+                - Key: Name
+                  Value: !Sub '${Proyecto}${NN}-subred-publica-1'
+    SubredPublica2:
+        Type: AWS::EC2::Subnet
+        DependsOn: IPv6CidrBlock
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Sub '10.${RedBase}.2${NN}.0/24'
+            Ipv6CidrBlock: !Select [2, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 256, 64]]
+            AvailabilityZone: !Select [1, !GetAZs '']
+            MapPublicIpOnLaunch: true
+            Tags:
+                - Key: Name
+                  Value: !Sub '${Proyecto}${NN}-subred-publica-2'
+
+    # Internet Gateway
+    InternetGateway:
+        Type: AWS::EC2::InternetGateway
+        Properties:
+            Tags:
+                - Key: Name
+                  Value: !Sub '${Proyecto}${NN}-igw'
+    VPCGatewayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            VpcId: !Ref VPC
+            InternetGatewayId: !Ref InternetGateway
+
+    # Tabla de rutas publica con rutas por defecto IPv4 e IPv6
+    TablaRutasPublica:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+            Tags:
+                - Key: Name
+                  Value: !Sub '${Proyecto}${NN}-rtb-public'
+    RutaPorDefectoIPv4:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref TablaRutasPublica
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: !Ref InternetGateway
+    RutaPorDefectoIPv6:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref TablaRutasPublica
+            DestinationIpv6CidrBlock: ::/0
+            GatewayId: !Ref InternetGateway
+    AsociacionSubred1:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPublica1
+            RouteTableId: !Ref TablaRutasPublica
+    AsociacionSubred2:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref SubredPublica2
+            RouteTableId: !Ref TablaRutasPublica
+
+    ###########################################################################
+    # UBUNTU SERVER
+    ###########################################################################
+    # Grupo de seguridad Ubuntu. SSH, HTTP y DNS IPv4/IPv6
+    UbuntuSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: !Sub '${Proyecto}${NN}-us-sg'
+            GroupDescription: !Sub '${Proyecto}${NN}-us-sg'
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 22
+                  ToPort: 22
+                  CidrIp: 0.0.0.0/0
+                  Description: Permitir SSH IPv4
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+                  Description: Permitir HTTP IPv4
+                - IpProtocol: tcp
+                  FromPort: 53
+                  ToPort: 53
+                  CidrIp: 0.0.0.0/0
+                  Description: Permitir DNS(TCP) IPv4
+                - IpProtocol: udp
+                  FromPort: 53
+                  ToPort: 53
+                  CidrIp: 0.0.0.0/0
+                  Description: Permitir DNS(UDP) IPv4
+                - IpProtocol: tcp
+                  FromPort: 22
+                  ToPort: 22
+                  CidrIpv6: ::/0
+                  Description: Permitir SSH IPv6
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIpv6: ::/0
+                  Description: Permitir HTTP IPv6
+                - IpProtocol: tcp
+                  FromPort: 53
+                  ToPort: 53
+                  CidrIpv6: ::/0
+                  Description: Permitir DNS(TCP) IPv6
+                - IpProtocol: udp
+                  FromPort: 53
+                  ToPort: 53
+                  CidrIpv6: ::/0
+                  Description: Permitir DNS(UDP) IPv6
+            Tags:
+                - Key: Name
+                  Value: !Sub '${Proyecto}${NN}-us-sg'
+
+    UbuntuInstance:
+        Type: AWS::EC2::Instance
+        Properties:
+            ImageId: !Ref AMIUbuntu
+            InstanceType: t2.micro
+            KeyName: !Ref NombreClave
+            IamInstanceProfile: LabInstanceProfile
+            Monitoring: false
+            Ipv6AddressCount: 1
+            SecurityGroupIds:
+                - !Ref UbuntuSecurityGroup
+            SubnetId: !Ref SubredPublica1
+            PrivateIpAddress: !Sub '10.${RedBase}.1${NN}.100'
+            UserData:
+                Fn::Base64: |
+                    #!/bin/bash
+                    echo 'User data para Ubuntu Server'
+                    apt-get update -y
+                    apt-get upgrade -y
+                    apt-get install bind9 -y
+                    apt-get install apache2 -y
+                    apt-get install php php-mysql -y
+                    apt-get install snapd -y
+                    if ! snap list amazon-ssm-agent >/dev/null 2>&1; then
+                        snap install amazon-ssm-agent --classic
+                    fi
+                    systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+                    systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
+            Tags:
+                - Key: Name
+                  Value: !Sub '${Proyecto}${NN}-us'
+    UbuntuElasticIp:
+        Type: AWS::EC2::EIP
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            Domain: vpc
+            InstanceId: !Ref UbuntuInstance
+            Tags:
+                - Key: Name
+                  Value: !Sub '${Proyecto}${NN}-us-ip'
+
+    ###########################################################################
+    # WINDOWS SERVER
+    ###########################################################################
+    # Grupo de seguridad Windows. RDP, HTTP y DNS IPv4/IPv6
+    WindowsSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: !Sub '${Proyecto}${NN}-ws-sg'
+            GroupDescription: !Sub '${Proyecto}${NN}-ws-sg'
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 3389
+                  ToPort: 3389
+                  CidrIp: 0.0.0.0/0
+                  Description: Permitir RDP IPv4
+                - IpProtocol: tcp
+                  FromPort: 53
+                  ToPort: 53
+                  CidrIp: 0.0.0.0/0
+                  Description: Permitir DNS(TCP) IPv4
+                - IpProtocol: udp
+                  FromPort: 53
+                  ToPort: 53
+                  CidrIp: 0.0.0.0/0
+                  Description: Permitir DNS(UDP) IPv4
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+                  Description: Permitir HTTP IPv4
+                - IpProtocol: tcp
+                  FromPort: 3389
+                  ToPort: 3389
+                  CidrIpv6: ::/0
+                  Description: Permitir RDP IPv6
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIpv6: ::/0
+                  Description: Permitir HTTP IPv6
+                - IpProtocol: tcp
+                  FromPort: 53
+                  ToPort: 53
+                  CidrIpv6: ::/0
+                  Description: Permitir DNS(TCP) IPv6
+                - IpProtocol: udp
+                  FromPort: 53
+                  ToPort: 53
+                  CidrIpv6: ::/0
+                  Description: Permitir DNS(UDP) IPv6
+            Tags:
+                - Key: Name
+                  Value: !Sub '${Proyecto}${NN}-ws-sg'
+
+    # Todo el trafico entre los dos grupos de seguridad (recursos aparte para evitar dependencia circular)
+    UbuntuIngressDesdeWindows:
+        Type: AWS::EC2::SecurityGroupIngress
+        Properties:
+            GroupId: !Ref UbuntuSecurityGroup
+            SourceSecurityGroupId: !Ref WindowsSecurityGroup
+            IpProtocol: '-1'
+            Description: Permitir todo el trafico desde el grupo de seguridad de Windows
+    WindowsIngressDesdeUbuntu:
+        Type: AWS::EC2::SecurityGroupIngress
+        Properties:
+            GroupId: !Ref WindowsSecurityGroup
+            SourceSecurityGroupId: !Ref UbuntuSecurityGroup
+            IpProtocol: '-1'
+            Description: Permitir todo el trafico desde el grupo de seguridad de Ubuntu
+
+    WindowsInstance:
+        Type: AWS::EC2::Instance
+        Properties:
+            ImageId: !Ref AMIWindows
+            InstanceType: t3.medium
+            KeyName: !Ref NombreClave
+            IamInstanceProfile: LabInstanceProfile
+            Monitoring: false
+            Ipv6AddressCount: 1
+            SecurityGroupIds:
+                - !Ref WindowsSecurityGroup
+            SubnetId: !Ref SubredPublica2
+            PrivateIpAddress: !Sub '10.${RedBase}.2${NN}.100'
+            UserData:
+                Fn::Base64: |
+                    <powershell>
+                    Write-Host 'User data para Windows Server'
+                    if (-not (Get-Service -Name AmazonSSMAgent -ErrorAction SilentlyContinue)) {
+                        $token = Invoke-RestMethod -Method Put -Uri 'http://169.254.169.254/latest/api/token' -Headers @{'X-aws-ec2-metadata-token-ttl-seconds' = '21600'}
+                        $region = Invoke-RestMethod -Uri 'http://169.254.169.254/latest/meta-data/placement/region' -Headers @{'X-aws-ec2-metadata-token' = $token}
+                        $installer = Join-Path $env:TEMP 'AmazonSSMAgentSetup.exe'
+                        $downloadUrl = "https://s3.$region.amazonaws.com/amazon-ssm-$region/latest/windows_amd64/AmazonSSMAgentSetup.exe"
+                        Invoke-WebRequest -Uri $downloadUrl -OutFile $installer
+                        Start-Process -FilePath $installer -ArgumentList '/S' -Wait
+                    }
+                    Set-Service -Name AmazonSSMAgent -StartupType Automatic
+                    Start-Service -Name AmazonSSMAgent
+                    # Instalar el rol DNS
+                    Install-WindowsFeature -Name DNS -IncludeManagementTools
+                    # Desactivar el firewall de windows . Cuidado! ;-)
+                    Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+                    # Instalar Internet Information Services (IIS)
+                    Install-WindowsFeature -Name Web-Server -IncludeManagementTools
+                    </powershell>
+            Tags:
+                - Key: Name
+                  Value: !Sub '${Proyecto}${NN}-ws'
+    WindowsElasticIp:
+        Type: AWS::EC2::EIP
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            Domain: vpc
+            InstanceId: !Ref WindowsInstance
+            Tags:
+                - Key: Name
+                  Value: !Sub '${Proyecto}${NN}-ws-ip'
+
+Outputs:
+    VPCId:
+        Description: VPC ID
+        Value: !Ref VPC
+    VPCCidrIPv4:
+        Description: Bloque CIDR IPv4 de la VPC
+        Value: !GetAtt VPC.CidrBlock
+    VPCCidrIPv6:
+        Description: Bloque CIDR IPv6 de la VPC
+        Value: !Select [0, !GetAtt VPC.Ipv6CidrBlocks]
+    SubredPublica1Cidr:
+        Description: CIDR IPv4 de la subred publica 1
+        Value: !Sub '10.${RedBase}.1${NN}.0/24'
+    SubredPublica2Cidr:
+        Description: CIDR IPv4 de la subred publica 2
+        Value: !Sub '10.${RedBase}.2${NN}.0/24'
+    IPv4Ubuntu:
+        Description: IPv4 elastica Ubuntu
+        Value: !Ref UbuntuElasticIp
+    IPv4Windows:
+        Description: IPv4 elastica Windows
+        Value: !Ref WindowsElasticIp
+    httpUbuntu:
+        Description: URL IPv4 de la instancia Ubuntu
+        Value: !Sub 'http://${UbuntuElasticIp}'
+    httpWindows:
+        Description: URL IPv4 de la instancia Windows
+        Value: !Sub 'http://${WindowsElasticIp}'
+    sshUbuntu:
+        Description: SSH a la instancia Ubuntu
+        Value: !Sub 'ssh -i ${NombreClave}.pem ubuntu@${UbuntuElasticIp}'
