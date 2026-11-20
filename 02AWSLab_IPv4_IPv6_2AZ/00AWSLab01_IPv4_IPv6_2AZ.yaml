@@ -168,6 +168,7 @@ Resources:
                 - !Sub '${AWS::Region}.compute.internal'
             DomainNameServers:
                 - !Sub '10.${RedBase}.1${NN}.100'
+                - 8.8.8.8
             Tags:
                 - Key: Name
                   Value: !Sub '${Proyecto}${NN}-dhcp-opts'
