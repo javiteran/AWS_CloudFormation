@@ -64,6 +64,9 @@ Parameters:
         Description: Par de claves para las instancias
         Default: vockey
 
+Conditions:
+    IsUSEast1: !Equals [!Ref 'AWS::Region', 'us-east-1']
+
 Resources:
     # VPC con IPv4. El bloque IPv6 se asocia a continuacion
     VPC:
@@ -154,6 +157,28 @@ Resources:
             RouteTableId: !Ref TablaRutasPublica
 
     ###########################################################################
+    # DHCP OPTION SET
+    ###########################################################################
+    DHCPOptionSet:
+        Type: AWS::EC2::DHCPOptions
+        Properties:
+            DomainName: !If
+                - IsUSEast1
+                - ec2.internal
+                - !Sub '${AWS::Region}.compute.internal'
+            DomainNameServers:
+                - !Sub '10.${RedBase}.1${NN}.100'
+            Tags:
+                - Key: Name
+                  Value: !Sub '${Proyecto}${NN}-dhcp-opts'
+
+    DHCPOptionsAssociation:
+        Type: AWS::EC2::VPCDHCPOptionsAssociation
+        Properties:
+            VpcId: !Ref VPC
+            DhcpOptionsId: !Ref DHCPOptionSet
+
+    ###########################################################################
     # UBUNTU SERVER
     ###########################################################################
     # Grupo de seguridad Ubuntu. SSH, HTTP y DNS IPv4/IPv6
@@ -233,7 +258,7 @@ Resources:
             SubnetId: !Ref SubredPublica1
             PrivateIpAddress: !Sub '10.${RedBase}.1${NN}.100'
             UserData:
-                Fn::Base64: |
+                Fn::Base64: !Sub |
                     #!/bin/bash
                     echo 'User data para Ubuntu Server'
                     apt-get update -y
@@ -247,6 +272,72 @@ Resources:
                     fi
                     systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
                     systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
+                    
+                    # Configurar BIND9 named.conf.options
+                    cat > /etc/bind/named.conf.options << 'EOF'
+                    options {
+                        directory "/var/cache/bind";
+                    
+                        // Habilitar la recursión
+                        recursion yes;
+                    
+                        // Permitir la recursión solo a tu red local o a la IP del Windows Server
+                        allow-recursion {
+                            localhost;
+                            10.${RedBase}.1${NN}.0/24;
+                            10.${RedBase}.2${NN}.0/24;
+                        };
+                    
+                        // Opcional pero recomendado: Añadir forwarders hacia DNS públicos (ej. Google o Cloudflare)
+                        //forwarders {
+                        //    8.8.8.8;
+                        //    1.1.1.1;
+                        //};
+                    
+                        dnssec-validation auto;
+                        listen-on { any; };
+                        listen-on-v6 { any; };
+                    };
+                    EOF
+                    
+                    # Reiniciar BIND9
+                    systemctl restart bind9
+                    
+                    # Crear archivo de zona db.mi20${RedBase}${NN}.com
+                    cat > /etc/bind/db.mi20${RedBase}${NN}.com << 'EOF'
+                    $TTL    604800
+                    @       IN      SOA     ns1.mi20${RedBase}${NN}.com. admin. (
+                                         2026112001         ; Serial
+                                             604800         ; Refresh
+                                              86400         ; Retry
+                                            2419200         ; Expire
+                                             604800 )       ; Negative Cache TTL
+                    ;
+                    @       IN      NS      ns1
+                    @       IN      NS      ns2
+                    ns1     IN      A       10.${RedBase}.1${NN}.100
+                    ns2     IN      A       10.${RedBase}.2${NN}.100
+                    www     IN      A       10.${RedBase}.1${NN}.100
+                    secreto IN      CNAME   www
+                    javi    IN      CNAME   informatica.javiteran.com.
+                    @       IN      MX 10   mail
+                    mail    IN      A       10.26.115.100
+                    EOF
+                    
+                    # Configurar named.conf.local para incluir la zona
+                    cat > /etc/bind/named.conf.local << 'EOF'
+                    zone "mi20${RedBase}${NN}.com" {
+                        type master;
+                        file "/etc/bind/db.mi20${RedBase}${NN}.com";
+                        allow-transfer {
+                            10.${RedBase}.2${NN}.100;
+                        }
+                    };
+                    EOF
+
+                    # Validar configuración y reiniciar BIND9
+                    named-checkconf /etc/bind/named.conf
+                    systemctl restart bind9
             Tags:
                 - Key: Name
                   Value: !Sub '${Proyecto}${NN}-us'
@@ -420,3 +511,15 @@ Outputs:
     sshUbuntu:
         Description: SSH a la instancia Ubuntu
         Value: !Sub 'ssh -i ${NombreClave}.pem ubuntu@${UbuntuElasticIp}'
+    DHCPOptionSetId:
+        Description: ID del DHCP Option Set
+        Value: !Ref DHCPOptionSet
+    UbuntuPrivateIp:
+        Description: IP privada de la instancia Ubuntu
+        Value: !Sub '10.${RedBase}.1${NN}.100'
+    WindowsPrivateIp:
+        Description: IP privada de la instancia Windows
+        Value: !Sub '10.${RedBase}.2${NN}.100'
+    DHCPDnsServers:
+        Description: Servidores DNS configurados en el DHCP Option Set
+        Value: !Sub '10.${RedBase}.1${NN}.100, 10.${RedBase}.2${NN}.100'

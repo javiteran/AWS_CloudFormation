@@ -1,0 +1,252 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                  CONFIGURACIÓN BIND9 - RESUMEN DE CAMBIOS                     ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+📍 ARCHIVO MODIFICADO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Archivo:  00AWSLab01_IPv4_IPv6_2AZ.yaml
+Ubicación: C:\Users\javier.teran\Documents\github\AWS_CloudFormation\
+           02AWSLab_IPv4_IPv6_2AZ\
+Recurso:  UbuntuInstance
+Sección:  UserData
+Cambio:   ADICIÓN de configuración BIND9
+
+
+🔧 LO QUE SE AGREGÓ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Se agregaron comandos bash al UserData de Ubuntu que:
+
+1. Crean el archivo /etc/bind/named.conf.options
+2. Configuran BIND9 con:
+   ✓ Recursión habilitada
+   ✓ Allow-recursion limitado a redes locales
+   ✓ Validación DNSSEC automática
+   ✓ Escucha en IPv4 e IPv6
+3. Reinician BIND9 para aplicar cambios
+
+
+📊 CONFIGURACIÓN GENERADA (con valores por defecto)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/etc/bind/named.conf.options:
+
+┌─────────────────────────────────────────────────────────────┐
+│ options {                                                   │
+│     directory "/var/cache/bind";                            │
+│     recursion yes;                                          │
+│     allow-recursion {                                       │
+│         localhost;                                          │
+│         10.26.101.0/24;  ← Subred Ubuntu (NN=01)           │
+│         10.26.201.0/24;  ← Subred Windows (NN=01)          │
+│     };                                                      │
+│     dnssec-validation auto;                                │
+│     listen-on { any; };                                    │
+│     listen-on-v6 { any; };                                 │
+│ };                                                          │
+└─────────────────────────────────────────────────────────────┘
+
+
+🔀 PARÁMETROS DINÁMICOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+La configuración se genera dinámicamente según parámetros:
+
+Parámetro    | Por Defecto | Uso en BIND9
+─────────────┼─────────────┼──────────────────────────
+RedBase      | 26          | 10.{RedBase}.x.0/24
+NN           | 01          | 10.26.1{NN}.0/24, 10.26.2{NN}.0/24
+
+Ejemplos con diferentes valores de NN:
+
+NN=01:  allow-recursion { localhost; 10.26.101.0/24; 10.26.201.0/24; };
+NN=05:  allow-recursion { localhost; 10.26.105.0/24; 10.26.205.0/24; };
+NN=10:  allow-recursion { localhost; 10.26.110.0/24; 10.26.210.0/24; };
+
+
+🚀 PROCESO DE DESPLIEGUE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Cuando se lanza la instancia Ubuntu:
+
+1. ┌─────────────────────────────────────────────────────┐
+   │ Se ejecuta UserData                                 │
+   │ ├─ apt-get update && upgrade                        │
+   │ ├─ apt-get install bind9                            │
+   │ ├─ apt-get install apache2                          │
+   │ ├─ Configura BIND9: named.conf.options ← NUEVO      │
+   │ ├─ Instala amazon-ssm-agent                         │
+   │ └─ systemctl restart bind9                          │
+   └─────────────────────────────────────────────────────┘
+                           │
+                           ▼
+2. ┌─────────────────────────────────────────────────────┐
+   │ Archivo /etc/bind/named.conf.options existe         │
+   │ con la configuración completa                       │
+   └─────────────────────────────────────────────────────┘
+                           │
+                           ▼
+3. ┌─────────────────────────────────────────────────────┐
+   │ BIND9 se reinicia con nueva configuración           │
+   │ Puerto 53/TCP y 53/UDP escuchando                   │
+   └─────────────────────────────────────────────────────┘
+                           │
+                           ▼
+4. ┌─────────────────────────────────────────────────────┐
+   │ DNS Server Ubuntu está LISTO para resolver nombres  │
+   │ ✓ Recursión habilitada                              │
+   │ ✓ Allow-recursion limitado a redes locales          │
+   │ ✓ DNSSEC validado                                   │
+   └─────────────────────────────────────────────────────┘
+
+
+⚙️ CONFIGURACIÓN BIND9 - EXPLICACIÓN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+directory "/var/cache/bind"
+  → Ubicación del caché y archivos de zona de BIND9
+
+recursion yes
+  → Permite que BIND9 resuelva nombres recursivamente
+  → Es decir, puede consultar otros DNS si no tiene la respuesta
+
+allow-recursion { localhost; 10.26.1NN.0/24; 10.26.2NN.0/24; }
+  → Define QUIÉN puede hacer consultas recursivas
+  → localhost: La misma instancia
+  → 10.26.1NN.0/24: Instancias en Subred Ubuntu
+  → 10.26.2NN.0/24: Instancias en Subred Windows
+  → ⚠️ Esto evita que Internet use tu DNS (seguridad)
+
+dnssec-validation auto
+  → Valida automáticamente firmas DNSSEC
+  → Proporciona seguridad en resolución DNS
+
+listen-on { any; }
+  → Escucha en todas las direcciones IPv4
+
+listen-on-v6 { any; }
+  → Escucha en todas las direcciones IPv6
+
+
+📋 VERIFICACIÓN POST-DEPLOYMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Conectar a Ubuntu:
+   ssh -i vockey.pem ubuntu@<ELASTIC_IP>
+
+2. Verificar archivo existe:
+   cat /etc/bind/named.conf.options
+
+3. Verificar BIND9 corriendo:
+   sudo systemctl status bind9
+
+4. Verificar puerto 53:
+   sudo netstat -tlnp | grep :53
+   
+   Debería mostrar:
+   tcp   0  0 0.0.0.0:53   0.0.0.0:*   LISTEN    PID/named
+   tcp6  0  0 :::53        :::*        LISTEN    PID/named
+
+5. Probar resolución DNS (desde otra instancia):
+   nslookup google.com 10.26.101.100
+   dig @10.26.101.100 example.com
+
+6. Ver logs:
+   sudo tail -20 /var/log/syslog | grep named
+
+
+🔧 MODIFICAR CONFIGURACIÓN POST-DEPLOYMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Si necesitas cambiar la configuración DESPUÉS de desplegar:
+
+1. Editar archivo:
+   sudo nano /etc/bind/named.conf.options
+
+2. Validar sintaxis:
+   sudo named-checkconf /etc/bind/named.conf.options
+   
+   ✓ Si no muestra error, está bien
+
+3. Reiniciar BIND9:
+   sudo systemctl restart bind9
+
+4. Verificar:
+   sudo systemctl status bind9
+
+
+💡 OPCIONES ADICIONALES (Comentadas)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Forwarders (DNS públicos):
+
+Por defecto DESHABILITADOS (comentados):
+//forwarders {
+//    8.8.8.8;      ← Google DNS
+//    1.1.1.1;      ← Cloudflare DNS
+//};
+
+Para HABILITAR forwarding:
+1. Descomenta las líneas (elimina //)
+2. Edita el archivo: sudo nano /etc/bind/named.conf.options
+3. Reinicia BIND9: sudo systemctl restart bind9
+
+Con forwarders habilitados:
+- Si BIND9 no tiene respuesta local
+- Consulta a Google DNS (8.8.8.8) o Cloudflare (1.1.1.1)
+- Retorna la respuesta al cliente
+
+
+📂 ARCHIVOS BIND9 EN EL SISTEMA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/etc/bind/
+├── named.conf                    ← Configuración principal (no modificado)
+├── named.conf.options            ← ✓ NUEVO - Creado por UserData
+├── named.conf.local              ← Zonas locales (no modificado)
+├── named.conf.default-zones      ← Zonas por defecto (no modificado)
+├── db.root                        ← Raíces DNS (no modificado)
+├── db.127                         ← Zona loopback (no modificado)
+└── zones/                         ← Zonas personalizadas (opcional)
+
+
+⚠️ CONSIDERACIONES IMPORTANTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. UserData se ejecuta UNA SOLA VEZ
+   → Al lanzar la instancia
+   → NO se ejecuta si relanzas una instancia existente
+
+2. Variables CloudFormation se sustituyen en tiempo de despliegue
+   → ${RedBase} y ${NN} se reemplazan ANTES de enviar el UserData
+   → Los valores son FIJOS en el archivo generado
+
+3. Si cambias parámetros NN o RedBase
+   → Necesitas relanzar la instancia (redeploy)
+   → O editar manualmente /etc/bind/named.conf.options
+
+4. Cambios manuales se PIERDEN si relanzas la instancia
+   → El UserData generará de nuevo los archivos
+
+
+🎯 PRÓXIMOS PASOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. ✓ Archivo CloudFormation actualizado
+2. → Desplegar la plantilla (create-stack o update-stack)
+3. → Esperar a que se lance Ubuntu
+4. → Conectar y verificar /etc/bind/named.conf.options
+5. → Probar resolución DNS
+6. → Verificar logs en /var/log/syslog
+
+
+📚 DOCUMENTACIÓN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Ver documento completo: BIND9_Configuration.md
+Archivo YAML modificado: 00AWSLab01_IPv4_IPv6_2AZ.yaml
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║               ✅ CONFIGURACIÓN BIND9 COMPLETADA Y LISTO PARA USAR              ║
+╚════════════════════════════════════════════════════════════════════════════════╝
